@@ -6,8 +6,9 @@ import requests
 import urllib3
 urllib3.disable_warnings()
 import base64
+import time
+import plotly.express as px
 
-maices = pd.read_csv("maices.csv")
 
 my_query= """{
   taxons(pagination:{limit:200} search:{field:estatus value:"aceptado" operator:eq}){
@@ -40,12 +41,6 @@ df_taxons=pd.DataFrame.from_dict(taxons)
 image= 'fondo.png'
 fondo = base64.b64encode(open(image, 'rb').read())
 
-import plotly.express as px
-
-#fig = px.scatter_mapbox(maices, lat="latitud", lon="longitud", hover_name="especievalida", hover_data={'latitud':False, 'longitud':False, 'localidad':True}, color = "altitudmapa",
-#                        color_discrete_sequence=["fuchsia"], zoom=3, height=300)
-#fig.update_layout(mapbox_style="open-street-map")
-#fig.update_layout(margin={"r":0,"t":0,"l":0,"b":0})
 
 app = Dash(__name__)
 app.layout = html.Div([
@@ -53,8 +48,13 @@ app.layout = html.Div([
     dcc.Graph(id='mapa'),
     dcc.Graph(id='strip'),
     dcc.Dropdown(df_taxons['taxon'].unique(), 'Zea mays subsp. mays raza Blando de Sonora', id='pandas-dropdown-2', placeholder='Selecciona un taxon'),
+    dcc.Loading(id= 'loading-1', type='cube', children=html.Div(id='loading-output-1'), fullscreen= True),
     html.Div(id='pandas-output-container-2')
 ])
+
+@app.callback(Output("loading-output-1", "children"), Input("pandas-dropdown-2", "value"))
+def input_triggers_spinner(column_chosen):
+    time.sleep(2)
 
 @app.callback(
     Output('pandas-output-container-2', 'children'),
@@ -96,10 +96,11 @@ def update_map(column_chosen):
             sizex=1, sizey=1, #sizex, sizey are set by trial and error
             xanchor="left",
             yanchor="top",
-            sizing="fill",
-            opacity= 0.7,
-            layer="above")
+            sizing="stretch",
+            opacity= 0.9,
+            layer="below")
         ) 
+        
     return fig1, fig2
 
 
