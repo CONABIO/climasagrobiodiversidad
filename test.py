@@ -1,13 +1,13 @@
 import dash_leaflet as dl
 import dash_leaflet.express as dlx
 import pandas as pd
-from dash_extensions.javascript import assign
 from dash import Dash, html, dcc, Input, Output
 import requests
 import urllib3
 urllib3.disable_warnings()
+import base64
 
-#maices = pd.read_csv("maices.csv")
+maices = pd.read_csv("maices.csv")
 
 my_query= """{
   taxons(pagination:{limit:200} search:{field:estatus value:"aceptado" operator:eq}){
@@ -37,6 +37,9 @@ for i in range (len(result['data']['taxons'])):
 
 df_taxons=pd.DataFrame.from_dict(taxons)
 
+image= 'fondo.png'
+fondo = base64.b64encode(open(image, 'rb').read())
+
 import plotly.express as px
 
 #fig = px.scatter_mapbox(maices, lat="latitud", lon="longitud", hover_name="especievalida", hover_data={'latitud':False, 'longitud':False, 'localidad':True}, color = "altitudmapa",
@@ -48,6 +51,7 @@ app = Dash(__name__)
 app.layout = html.Div([
     html.H1('Maices en México', style={'textAlign': 'center', 'color': '#1A1A1A'}),
     dcc.Graph(id='mapa'),
+    dcc.Graph(id='strip'),
     dcc.Dropdown(df_taxons['taxon'].unique(), id='pandas-dropdown-2', placeholder='Selecciona un taxon'),
     html.Div(id='pandas-output-container-2')
 ])
@@ -61,30 +65,44 @@ def update_output(value):
 
 @app.callback(
     Output(component_id='mapa', component_property='figure'),
+    Output(component_id='strip', component_property='figure'),
     [Input(component_id='pandas-dropdown-2', component_property='value')]
 )
+
 
 def update_map(column_chosen):
     try:
         taxon_id=df_taxons.loc[df_taxons['taxon']== column_chosen, 'taxon_id'].values[0]
-        new_query = '{\n  taxons(pagination:{limit:500} search:{field:taxon_id value:"%'+ taxon_id + '%" operator:iLike}){\n    taxon_id\n    taxon\n    registroConnection(pagination:{first:9000}){\n      edges{\n        node{\n          id\n          sitio{\n            latitud\n            longitud\n            estado\n            municipio\n            localidad\n          }\n        }\n      }\n    }\n  }\n}'
-        result= run_query(url, new_query, statusCode)
     except: 
         column_chosen = 'Zea mays subsp. mays raza Blando de Sonora'
-        taxon_id=df_taxons.loc[df_taxons['taxon']== column_chosen, 'taxon_id'].values[0]
-        new_query = '{\n  taxons(pagination:{limit:500} search:{field:taxon_id value:"%'+ taxon_id + '%" operator:iLike}){\n    taxon_id\n    taxon\n    registroConnection(pagination:{first:9000}){\n      edges{\n        node{\n          id\n          sitio{\n            latitud\n            longitud\n            estado\n            municipio\n            localidad\n          }\n        }\n      }\n    }\n  }\n}'
-        result= run_query(url, new_query, statusCode)    
+    taxon_id=df_taxons.loc[df_taxons['taxon']== column_chosen, 'taxon_id'].values[0]
+    new_query = '{\n  taxons(pagination:{limit:500} search:{field:taxon_id value:"%'+ taxon_id + '%" operator:iLike}){\n    taxon_id\n    taxon\n    registroConnection(pagination:{first:9000}){\n      edges{\n        node{\n          id\n          sitio{\n            latitud\n            longitud\n            altitud\n            estado\n            municipio\n            localidad\n          }\n        }\n      }\n    }\n  }\n}'
+    result= run_query(url, new_query, statusCode)    
     complete_dict=[]
     for i in range (len(result['data']['taxons'][0]['registroConnection']['edges'])):
         sitio = result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['sitio']
         complete_dict.append(sitio)
     df = pd.DataFrame.from_dict(complete_dict)
-    df = df.dropna()
-    df['especievalida'] = column_chosen
-    fig = px.scatter_mapbox(df, lat="latitud", lon="longitud", hover_name="especievalida", hover_data={'latitud':False, 'longitud':False, 'estado': True, 'municipio':True},
-                            zoom=4, height=500)
-    fig.update_layout(mapbox_style="open-street-map")
-    fig.update_layout(margin={"r":0,"t":0,"l":0,"b":0})
-    return fig
+    fig1 = px.scatter_mapbox(df, lat="latitud", lon="longitud", hover_data={'latitud':False, 'longitud':False, 'municipio':True}, color = "altitud",
+                            color_discrete_sequence=["fuchsia"], zoom=4, height=500)
+    fig1.update_layout(mapbox_style="open-street-map")
+    fig1.update_layout(margin={"r":0,"t":0,"l":0,"b":0})
+    fig1.update_coloraxes(showscale=False)
+
+    fig2 = px.strip(df, x='altitud', stripmode='overlay', range_x= (0, 3400))
+    fig2.update_layout(margin={"r":20,"t":40,"l":40,"b":40})
+    fig2.update_layout(height= 150)
+    fig2.add_layout_image(
+        dict(
+            source='data:image/png;base64,{}'.format(fondo.decode()),
+            xref="paper", yref= 'paper',
+            sizex=1, sizey=0.46, #sizex, sizey are set by trial and error
+            xanchor="left",
+            yanchor="top",
+            sizing="fill",
+            layer="below")
+        ) 
+    return fig1, fig2
+
 
 app.run_server(debug=True, use_reloader=False) 
