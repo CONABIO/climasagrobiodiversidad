@@ -52,7 +52,7 @@ app.layout = html.Div([
     html.H1('Maices en México', style={'textAlign': 'center', 'color': '#1A1A1A'}),
     dcc.Graph(id='mapa'),
     dcc.Graph(id='strip'),
-    dcc.Dropdown(df_taxons['taxon'].unique(), id='pandas-dropdown-2', placeholder='Selecciona un taxon'),
+    dcc.Dropdown(df_taxons['taxon'].unique(), 'Zea mays subsp. mays raza Blando de Sonora', id='pandas-dropdown-2', placeholder='Selecciona un taxon'),
     html.Div(id='pandas-output-container-2')
 ])
 
@@ -71,10 +71,6 @@ def update_output(value):
 
 
 def update_map(column_chosen):
-    try:
-        taxon_id=df_taxons.loc[df_taxons['taxon']== column_chosen, 'taxon_id'].values[0]
-    except: 
-        column_chosen = 'Zea mays subsp. mays raza Blando de Sonora'
     taxon_id=df_taxons.loc[df_taxons['taxon']== column_chosen, 'taxon_id'].values[0]
     new_query = '{\n  taxons(pagination:{limit:500} search:{field:taxon_id value:"%'+ taxon_id + '%" operator:iLike}){\n    taxon_id\n    taxon\n    registroConnection(pagination:{first:9000}){\n      edges{\n        node{\n          id\n          sitio{\n            latitud\n            longitud\n            altitud\n            estado\n            municipio\n            localidad\n          }\n        }\n      }\n    }\n  }\n}'
     result= run_query(url, new_query, statusCode)    
@@ -96,11 +92,13 @@ def update_map(column_chosen):
         dict(
             source='data:image/png;base64,{}'.format(fondo.decode()),
             xref="paper", yref= 'paper',
-            sizex=1, sizey=0.46, #sizex, sizey are set by trial and error
+            x=0, y=1,
+            sizex=1, sizey=1, #sizex, sizey are set by trial and error
             xanchor="left",
             yanchor="top",
             sizing="fill",
-            layer="below")
+            opacity= 0.7,
+            layer="above")
         ) 
     return fig1, fig2
 
