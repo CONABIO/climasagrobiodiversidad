@@ -1,3 +1,4 @@
+from re import search
 import dash_leaflet as dl
 import dash_leaflet.express as dlx
 import pandas as pd
@@ -8,7 +9,12 @@ urllib3.disable_warnings()
 import base64
 import time
 import plotly.express as px
+import flask
+#from selenium import webdriver
+#from selenium.webdriver import FirefoxOptions
 
+#opts = FirefoxOptions()
+#opts.add_argument("--headless")
 
 my_query= """{
   taxons(pagination:{limit:200} search:{field:estatus value:"aceptado" operator:eq}){
@@ -38,8 +44,27 @@ for i in range (len(result['data']['taxons'])):
 
 df_taxons=pd.DataFrame.from_dict(taxons)
 
+df_taxons = df_taxons.drop(df_taxons['taxon'].loc[df_taxons['taxon']=='Zea mays'].index)
+df_taxons = df_taxons.drop(df_taxons['taxon'].loc[df_taxons['taxon']=='Zea mays subsp. mays'].index)
+df_taxons = df_taxons.reset_index(drop=True)
+
+def change_taxon (x):
+    if x.startswith('Zea mays subsp. mays'):
+        start = 'Zea mays subsp. mays'
+        y = 'maiz' + x[len(start):]
+    elif x.startswith('Zea mays subsp. mexicana'):
+        start = 'Zea mays subsp. mexicana'
+        y = 'teocintle subespecie mexicana' + x[len(start):]
+    elif x.startswith('Zea mays subsp. parviglumis'):
+        start = 'Zea mays subsp. parviglumis'
+        y = 'teocintle subespecie parviglumis' + x[len(start):]
+    return y
+
+df_taxons['taxon simple']=df_taxons['taxon'].apply(change_taxon)
+
 image= 'fondo.png'
 fondo = base64.b64encode(open(image, 'rb').read())
+
 
 
 app = Dash(__name__)
@@ -47,18 +72,21 @@ app.layout = html.Div([
     html.H1('Maices en México', style={'textAlign': 'center', 'color': '#1A1A1A'}),
     dcc.Graph(id='mapa'),
     dcc.Graph(id='strip'),
-    dcc.Dropdown(df_taxons['taxon'].unique(), 'Zea mays subsp. mays raza Blando de Sonora', id='pandas-dropdown-2', placeholder='Selecciona un taxon'),
-    dcc.Loading(id= 'loading-1', type='cube', children=html.Div(id='loading-output-1'), fullscreen= True),
+    dcc.Location(id='url', refresh=True),
+    dcc.Dropdown(df_taxons['taxon simple'].unique(), 'maiz raza Blando de Sonora', id='pandas-dropdown-2', placeholder='Selecciona un tipo de maiz'),
+    dcc.Loading(id= 'loading-1', type='dot', children=html.Div(id='loading-output-1'), fullscreen= True),
     html.Div(id='pandas-output-container-2')
+
 ])
 
 @app.callback(Output("loading-output-1", "children"), Input("pandas-dropdown-2", "value"))
 def input_triggers_spinner(column_chosen):
+    print(flask.request.base_url)
     time.sleep(2)
 
 @app.callback(
     Output('pandas-output-container-2', 'children'),
-    Input('pandas-dropdown-2', 'value')
+    [Input('pandas-dropdown-2', 'value')] 
 )
 def update_output(value):
     return f'Seleccionaste el taxon {value}'
@@ -68,10 +96,14 @@ def update_output(value):
     Output(component_id='strip', component_property='figure'),
     [Input(component_id='pandas-dropdown-2', component_property='value')]
 )
+#def callback_func(search):
+    # here you can use the pathname however, just like a normal function input
+ #   print(search)
 
 
 def update_map(column_chosen):
-    taxon_id=df_taxons.loc[df_taxons['taxon']== column_chosen, 'taxon_id'].values[0]
+    print(flask.request.base_url)
+    taxon_id=df_taxons.loc[df_taxons['taxon simple']== column_chosen, 'taxon_id'].values[0]
     new_query = '{\n  taxons(pagination:{limit:500} search:{field:taxon_id value:"%'+ taxon_id + '%" operator:iLike}){\n    taxon_id\n    taxon\n    registroConnection(pagination:{first:9000}){\n      edges{\n        node{\n          id\n          sitio{\n            latitud\n            longitud\n            altitud\n            estado\n            municipio\n            localidad\n          }\n        }\n      }\n    }\n  }\n}'
     result= run_query(url, new_query, statusCode)    
     complete_dict=[]
@@ -102,6 +134,5 @@ def update_map(column_chosen):
         ) 
         
     return fig1, fig2
-
 
 app.run_server(debug=True, use_reloader=False) 
