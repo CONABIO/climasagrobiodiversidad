@@ -4,12 +4,16 @@ library(sp)
 library(rgdal)
 library(sf)
 library(dplyr)
+library(tidyverse)
 library(matrixStats)
-
+library(jsonlite)
 
 
 ################ raster Bioclimas ###########
 ##############################################
+
+#set working directory
+setwd("~/rasters")
 
 #lectura de bandas del raster
 bioclimas <- stack(list.files(path="./b19802009gw", pattern=".tif$", full.names=T))
@@ -17,38 +21,17 @@ bioclimas <- stack(list.files(path="./b19802009gw", pattern=".tif$", full.names=
 
 #Lectura de BD de maíces
 maices <- read.csv("./maices.csv")
+maices <- maices |> select(-taxon, -proyecto)
 
 #sistema de coordenadas
 dec<-"+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs"
-xcoors<-st_as_sf(maices,coords = c("longitud", "latitud"), crs = dec)
+xcoors<-st_as_sf(maices,coords = c("sitio.longitud", "sitio.latitud"), crs = dec)
 
 #extracción de valores del raster de bioclimas
 coors_bioclimas <- extract(bioclimas,xcoors)
 
 #incorporación de valores del raster a la base de maíces
 maices_cond_clim_df<-cbind(maices, coors_bioclimas)
-
-maices_cond_clim_df <-maices_cond_clim_df |> 
-  rename("temp_media_anual"= bio01_t3gw,
-         "rango_temp_diurna"= bio02_t3gw,
-         "Isotermalidad" = bio03_t3gw,
-         "Estacionalidad_temp" = bio04_t3gw,
-         "Temp_maxima" = bio05_t3gw,
-         "Temp_minima" = bio06_t3gw,
-         "Rango_anual_temp" = bio07_t3gw,
-         "Temp_media_trim_+lluvioso" = bio08_t3gw,
-         "Temp_media_trim_+seco" = bio09_t3gw,
-         "Temp_media_trim_+calido" =  bio10_t3gw,         
-         "Temp_media_trim_+frio" = bio11_t3gw,
-         "Precipitación_anual"= bio12_t3gw,        
-         "Precip_mes_+lluvioso" = bio13_t3gw,        
-         "Precip_mes_+seco" = bio14_t3gw,        
-         "Estacionalidad_precip" = bio15_t3gw,        
-         "Precipt_trim_+lluvioso" = bio16_t3gw,       
-         "Precipt_trim_+seco" = bio17_t3gw,         
-         "Precipt_trim_+calido" = bio18_t3gw,         
-         "Precipt_trim_+frio" = bio19_t3gw )
-
 
 
 ################ rasters Precipitación ###########
@@ -57,33 +40,16 @@ maices_cond_clim_df <-maices_cond_clim_df |>
 #lectura de bandas del raster
 precipitacion <-stack(list.files(path="./p19802009gw", pattern=".tif$", full.names=T))
 
-#plot(precipitacion)
-
 #extracción de valores del raster de precipitación
 coors_precipitacion <-extract(precipitacion,xcoors)
 
 #incorporación de valores del raster a la base de maíces
 maices_cond_clim_df <-cbind(maices_cond_clim_df, coors_precipitacion)
-maices_cond_clim_df <- maices_cond_clim_df |> rename("Precip_ene00" = ppt01_t3gw,
-                              "Precip_feb00" = ppt02_t3gw,
-                              "Precip_mar00" = ppt03_t3gw,
-                              "Precip_abr00" = ppt04_t3gw,
-                              "Precip_may00" = ppt05_t3gw,
-                              "Precip_jun00" = ppt06_t3gw,
-                              "Precip_jul00" = ppt07_t3gw,
-                              "Precip_ago00" = ppt08_t3gw,
-                              "Precip_sep00" = ppt09_t3gw,
-                              "Precip_oct00" = ppt10_t3gw,
-                              "Precip_nov00" = ppt11_t3gw,
-                              "Precip_dic00" = ppt12_t3gw)
 
-
-# creación de variables de precipitación máxima y mínima
+# creación de la variable de precipitación promedio may-oct 2000
 maices_cond_clim_df <- maices_cond_clim_df |> 
   #replace(is.na(), 0) %>% 
-  mutate(Precip_max = rowMaxs(as.matrix(maices_cond_clim_df[,c(42,43,44,45,46,47,48,49,50,51,52,53)])),
-         Precip_min = rowMins(as.matrix(maices_cond_clim_df[,c(42,43,44,45,46,47,48,49,50,51,52,53)])))
-  
+  mutate(Precip_prom_may_oct = rowMeans2(as.matrix(maices_cond_clim_df[,c(35,36,37,38,39,40)])))
 
 
 ################ rasters Temperatura mínima ###########
@@ -92,23 +58,79 @@ maices_cond_clim_df <- maices_cond_clim_df |>
 #lectura de bandas del raster
 temperatura <- stack(list.files(path="./tmi198009gw", pattern=".tif$", full.names=T))
 
-#plot(precipitacion)
-
-
 #extracción de valores del raster de temp mínima
 coors_temperatura <- extract(temperatura,xcoors)
 
 #incorporación de valores del raster a la base de maíces
 maices_cond_clim_df <-cbind(maices_cond_clim_df, coors_temperatura)
-maices_cond_clim_df <- maices_cond_clim_df |> rename("tmin_ene00" = tmin01_t3gw,
-                                                     "tmin_feb00" = tmin02_t3gw,
-                                                     "tmin_mar00" = tmin03_t3gw,
-                                                     "tmin_abr00" = tmin04_t3gw,
-                                                     "tmin_may00" = tmin05_t3gw,
-                                                     "tmin_jun00" = tmin06_t3gw,
-                                                     "tmin_jul00" = tmin07_t3gw,
-                                                     "tmin_ago00" = tmin08_t3gw,
-                                                     "tmin_sep00" = tmin09_t3gw,
-                                                     "tmin_oct00" = tmin10_t3gw,
-                                                     "tmin_nov00" = tmin11_t3gw,
-                                                     "tmin_dic00" = tmin12_t3gw)
+
+
+################ rasters Temperatura máxima ###########
+#######################################################
+
+#lectura de bandas del raster
+temperatura_max <- stack(list.files(path="./tm198009gw", pattern=".tif$", full.names=T))
+
+#extracción de valores del raster de temp mínima
+coors_temperatura_max <- extract(temperatura_max,xcoors)
+
+#incorporación de valores del raster a la base de maíces
+maices_cond_clim_df <-cbind(maices_cond_clim_df, coors_temperatura_max)
+
+#creación de la variable de temp max promedio may-oct 2000
+maices_cond_clim_df <- maices_cond_clim_df |> 
+  #replace(is.na(), 0) %>% 
+  mutate(temp_max_prom_may_oct = rowMeans2(as.matrix(maices_cond_clim_df[,c(60,61,62,63,64,65)])))
+
+
+
+############################################################
+#################  Base CONDICONES SITIO  #################
+###########################################################
+
+#selección de variables para la base CONDICIONES SITIO
+df_cond_sitio <- maices_cond_clim_df |> 
+                    select(id,Precip_prom_may_oct,temp_max_prom_may_oct)
+
+#convertir en formato largo el dataframe 'df_cond_sitio', para crear las variables 'condicion'
+#y 'valor' del modelo de datos'condiones-sitio'
+df_cond_sitio <- df_cond_sitio |> 
+                  pivot_longer(cols = c("Precip_prom_may_oct","temp_max_prom_may_oct"),
+                               names_to = "condicion",
+                               values_to = "valor")
+
+#Recodificación de la variable 'condicion'
+df_cond_sitio$condicion[df_cond_sitio$condicion=="Precip_prom_may_oct"] <- "Precipitación media para los meses mayo-octubre periodo 2000"
+df_cond_sitio$condicion[df_cond_sitio$condicion=="temp_max_prom_may_oct"] <- "Temperatura máxima media para los meses mayo-octubre periodo 2000"
+
+#creación de las variables 'unidad', 'fuente' y 'sitio_id' del modelo de datos 'condiciones-sitio'
+df_cond_sitio <- df_cond_sitio |> 
+                    mutate(unidad=ifelse(condicion=="Temperatura máxima media para los meses mayo-octubre periodo 2000",
+                                     "°C", "mm"),
+                           nombre_corto=ifelse(condicion=="Temperatura máxima media para los meses mayo-octubre periodo 2000",
+                                               "Tmax_mean_mayoct_2000", "Pptmean_mayoct_2000"),
+                           fuente=ifelse(condicion=="Temperatura máxima media para los meses mayo-octubre periodo 2000",
+                                         "Se calculó el promedio mensual para los meses mayo-octubre a partir de extraer el valor de la celda donde cae el punto del sitio en los rasters mensuales de Cuervo-Robayo A.P., C. Ureta, M.A. Gómez-Albores, A.K. Meneses-Mosquera, O. Téllez-Valdés, E. Martínez-Meyer, (27/08/2019). 'Temperatura máxima mensual, periodo: 2000 (1980-2009)', edición: 1. Instituto de Biología, Universidad Nacional Autónoma de México. Estos mapas forman parte de la publicación: Cuervo-Robayo, A. P., Ureta, C., Gómez-Albores, M. A., Meneses-Mosquera, A. K., Téllez-Valdés, O., y E. Martínez-Meyer. (2020). One hundred years of climate change in Mexico. Plos One. https://doi.org/10.1371/journal.pone.0209808. Ciudad de México, México.",
+                                         "Se calculó el promedio mensual para los meses mayo-octubre a partir de extraer el valor de la celda donde cae el punto del sitio en los rasters mensuales de Cuervo-Robayo A.P., C. Ureta, M.A. Gómez-Albores, A.K. Meneses-Mosquera, O. Téllez-Valdés, E. Martínez-Meyer, (27/08/2019). 'Precipitación mensual, periodo: 2000 (1980-2009)', edición: 1. Instituto de Biología, Universidad Nacional Autónoma de México. Estos mapas forman parte de la publicación: Cuervo-Robayo, A. P., Ureta, C., Gómez-Albores, M. A., Meneses-Mosquera, A. K., Téllez-Valdés, O., y E. Martínez-Meyer. (2020). One hundred years of climate change in Mexico. Plos One. https://doi.org/10.1371/journal.pone.0209808. Ciudad de México, México.")) |> 
+                    rename("sitio_id"=id)  
+
+
+############################################################
+###############  Conversión a formato JSON  ###############
+###########################################################
+
+#conversión a formato JSON el dataframe 'df_conf_sitio', de acuerdo con el modelo
+# 'condiciones-sitio'
+cond_sit_json <- toJSON(df_cond_sitio, dataframe = 'rows', pretty = T)
+
+#conversión del formato json a un objeto de R para poder exportarlo
+cond_sit_tabla <- fromJSON(cond_sit_json)
+
+#exportar la base 'cond_sit_json' para ser cargada en la spa de maices-siagro
+write.csv(cond_sit_tabla,"cond_sit_json.csv")
+
+
+
+
+
+
