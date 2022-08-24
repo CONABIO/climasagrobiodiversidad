@@ -64,8 +64,8 @@ def change_taxon (x):
 
 df_taxons['taxon simple']=df_taxons['taxon'].apply(change_taxon)
 
-image= 'fondo.png'
-fondo = base64.b64encode(open(image, 'rb').read())
+#image= 'fondo.png'
+#fondo = base64.b64encode(open(image, 'rb').read())
 
 
 
@@ -77,6 +77,11 @@ app.layout = html.Div([
     dcc.Location(id='url', refresh=True),
     dcc.Dropdown(df_taxons['taxon simple'].unique(), 'maíz raza Blando de Sonora', id='pandas-dropdown-2', placeholder='Selecciona un tipo de maiz'),
     dcc.Loading(id= 'loading-1', type='dot', children=html.Div(id='loading-output-1'), fullscreen= True),
+    dcc.RadioItems([
+        {'label' : 'Altitud', 'value' : 'altitud'},
+        {'label' : 'Temperatura', 'value' : 'temperatura'},
+        {'label' : 'Precipitación', 'value' : 'precipitacion'}
+    ], 'altitud', id='radio-conditions'),
     html.Div(id='pandas-output-container-2')
 ])
 
@@ -202,15 +207,29 @@ def update_output(value):
 @app.callback(
     Output(component_id='mapa', component_property='figure'),
     Output(component_id='strip', component_property='figure'),
-    [Input(component_id='pandas-dropdown-2', component_property='value')]
+    [Input(component_id='pandas-dropdown-2', component_property='value'),
+    Input(component_id='radio-conditions', component_property='value')]
 )
 #def callback_func(search):
     # here you can use the pathname however, just like a normal function input
  #   print(search)
 
 #Función para el mapa 
-def update_map(column_chosen):
-    print(flask.request.base_url)
+def update_map(column_chosen, condition_chosen):
+    if condition_chosen == 'altitud':
+        image = 'altitud.png'
+        color_scale = 'turbid'
+        x_max = 3400
+    elif condition_chosen == 'temperatura':
+        image = 'temperatura.png'
+        color_scale = 'RdBu'
+        x_max = 40
+    elif condition_chosen == 'precipitacion':
+        image = 'precipitacion.png'
+        color_scale = 'YlGnBu'
+        x_max = 1500
+    x_min= 0
+    fondo = base64.b64encode(open(image, 'rb').read())
     taxon_id=df_taxons.loc[df_taxons['taxon simple']== column_chosen, 'taxon_id'].values[0]
     new_query = '{\n  taxons(pagination:{limit:500} search:{field:taxon_id value:"%'+ taxon_id + '%" operator:iLike}){\n    taxon_id\n    taxon\n    registroConnection(pagination:{first:9000}){\n      edges{\n        node{\n          id\n          sitio{\n            latitud\n            longitud\n            altitud\n            estado\n            municipio\n            localidad\n          }\n        }\n      }\n    }\n  }\n}'
     result= run_query(url, new_query, statusCode)    
@@ -220,12 +239,12 @@ def update_map(column_chosen):
         complete_dict.append(sitio)
     df = pd.DataFrame.from_dict(complete_dict)
     fig1 = px.scatter_mapbox(df, lat="latitud", lon="longitud", hover_data={'latitud':False, 'longitud':False, 'municipio':True}, color = "altitud",
-                            color_discrete_sequence=["fuchsia"], zoom=4, height=500)
+                            color_continuous_scale=color_scale, zoom=4, height=500, range_color = (x_min, x_max))
     fig1.update_layout(mapbox_style="open-street-map")
     fig1.update_layout(margin={"r":0,"t":0,"l":0,"b":0})
     fig1.update_coloraxes(showscale=False)
 
-    fig2 = px.strip(df, x='altitud', stripmode='overlay', range_x= (0, 3400))
+    fig2 = px.strip(df, x='altitud', stripmode='overlay', range_x= (x_min, x_max))
     fig2.update_layout(margin={"r":20,"t":40,"l":40,"b":40})
     fig2.update_layout(height= 150)
     fig2.add_layout_image(
