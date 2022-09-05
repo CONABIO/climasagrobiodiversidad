@@ -12,6 +12,7 @@ import plotly.express as px
 import flask
 from plotly.colors import n_colors
 import numpy as np
+import math 
 #from selenium import webdriver
 #from selenium.webdriver import FirefoxOptions
 
@@ -69,33 +70,48 @@ df_taxons['taxon simple']=df_taxons['taxon'].apply(change_taxon)
 #image= 'fondo.png'
 #fondo = base64.b64encode(open(image, 'rb').read())
 
-
-
-app = Dash(__name__)
-app.layout = html.Div([
+def make_layout ():
+    host = flask.request.host_url if flask.has_request_context() else ''
+    return html.Div([
     html.H1('Maices en México', style={'textAlign': 'center', 'color': '#1A1A1A'}),
     dcc.Graph(id='mapa'),
     dcc.Graph(id='strip'),
-    dcc.Location(id='url', refresh=True),
+    dcc.Location(id='url', refresh=False),
     dcc.Dropdown(df_taxons['taxon simple'].unique(), 'maíz raza Blando de Sonora', id='pandas-dropdown-2', placeholder='Selecciona un tipo de maiz'),
-    dcc.Loading(id= 'loading-1', type='dot', children=html.Div(id='loading-output-1'), fullscreen= True),
     dcc.RadioItems([
         {'label' : 'Altitud', 'value' : 'altitud'},
         {'label' : 'Temperatura', 'value' : 'temperatura'},
         {'label' : 'Precipitación', 'value' : 'precipitacion'}
     ], 'altitud', id='radio-conditions'),
+    dcc.Loading(id= 'loading-1', type='dot', children=html.Div(id='loading-output-1'), fullscreen= True),
     html.Div(id='pandas-output-container-2')
 ])
 
-@app.callback(Output("loading-output-1", "children"), Input("pandas-dropdown-2", "value"))
-def input_triggers_spinner(column_chosen):
-    print(flask.request.base_url)
-    time.sleep(2)
+app = Dash(__name__)
+app.layout = make_layout
+#app.layout = html.Div([
+ #   html.H1('Maices en México', style={'textAlign': 'center', 'color': '#1A1A1A'}),
+ #   dcc.Graph(id='mapa'),
+ #   dcc.Graph(id='strip'),
+ #   dcc.Location(id='url', refresh=True),
+ #   dcc.Dropdown(df_taxons['taxon simple'].unique(), 'maíz raza Blando de Sonora', id='pandas-dropdown-2', placeholder='Selecciona un tipo de maiz'),
+ #   dcc.RadioItems([
+ #       {'label' : 'Altitud', 'value' : 'altitud'},
+ #       {'label' : 'Temperatura', 'value' : 'temperatura'},
+ #       {'label' : 'Precipitación', 'value' : 'precipitacion'}
+ #   ], 'altitud', id='radio-conditions'),
+ #   dcc.Loading(id= 'loading-1', type='dot', children=html.Div(id='loading-output-1'), fullscreen= True),
+ #   html.Div(id='pandas-output-container-2')
+#])
 
 @app.callback(
     Output('pandas-output-container-2', 'children'),
-    [Input('pandas-dropdown-2', 'value')] 
-)
+    [Input('url', 'pathname')])
+def callback_func(pathname):
+    # here you can use the pathname however, just like a normal function input
+    print(flask.request.url_root)
+
+@app.callback(Output("loading-output-1", "children"), [Input("pandas-dropdown-2", "value")])
 
 #Función para el texto y la tabla 
 def update_output(value):
@@ -115,9 +131,10 @@ def update_output(value):
             color_grano = 'no disponible'
             sitio['color_grano']=color_grano
         else:
-            colores = ''
+            colores = []
             for j in range (len(result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['caracteristicas_cualitativasFilter'])):
-                colores = colores + ' ' +result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['caracteristicas_cualitativasFilter'][j]['valor']
+                #colores = colores +result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['caracteristicas_cualitativasFilter'][j]['valor'] + ', '
+                colores.append(result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['caracteristicas_cualitativasFilter'][j]['valor'])
             sitio['color_grano']=colores
         if len (result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['caracteristicas_cuantitativasFilter']) == 0:
             hileras_mazorca = 'no disponible'
@@ -171,8 +188,13 @@ def update_output(value):
     else:
         escala_temperatura = 'muy caliente'
     
-    min_temperatura = df['temperatura'].min()
-    max_temperatura = df['temperatura'].max()
+    if df['temperatura'].isnull().sum() == len(df['temperatura']): 
+        min_temperatura = '(no disponible)'
+        max_temperatura = '(no disponible)'
+        escala_temperatura= '(no disponible)'
+    else:
+        min_temperatura = round(df['temperatura'].min())
+        max_temperatura = round(df['temperatura'].max())
 
     mean_precipitacion = df['precipitacion'].mean() 
     def precipitacion (x):
@@ -199,21 +221,57 @@ def update_output(value):
     else:
         escala_precipitacion = 'muy abundantes'
     
-    min_precipitacion = df['precipitacion'].min()
-    max_precipitacion = df['precipitacion'].max()
+
+    if df['precipitacion'].isnull().sum() == len(df['precipitacion']): 
+        min_precipitacion = '(no disponible)'
+        max_precipitacion = '(no disponible)'
+        escala_precipitacion= '(no disponible)'
+    else:
+        min_precipitacion = round(df['temperatura'].min())
+        max_precipitacion = round(df['temperatura'].max())
+
+    hileras = df[df.hileras_mazorca != 'no disponible']
+    if len(hileras) !=0:
+        promedio_hileras = round(hileras['hileras_mazorca'].mean())
+    else:
+        promedio_hileras = '(no disponible)'
+
+    color_maices = df['color_grano']
+    colores = []
+    for i in color_maices:
+        if len (i) ==1:
+            colores.append(i[0])
+        else:
+            for j in range (len(i)):
+                colores.append(i[j])
+    
+    mylist = list(set(colores))
+    colores_maices = 'los colores: '
+    for i in range (len (mylist)):
+        color = str(mylist[i])
+        if color == 'no disponible':
+            continue
+        if len(color) <4:
+            continue
+        colores_maices = colores_maices + color + ', '
+    colores_maices =colores_maices[:-2]
+
+
+    df= df.round() 
+
     return dcc.Markdown (f'''El {value} se cultiva en general en tierras {escala_altitud} desde {min_altitud} hasta {max_altitud} metros sobre el nivel del mar (msnm). 
     Se cultiva en lugares donde durante la época de temporal la temperatura es {escala_temperatura}, con temperaturas que van desde {min_temperatura} °C hasta {max_temperatura} 
     ºC y donde las lluvias son {escala_precipitacion}, con cantidades que van desde {min_precipitacion} mm hasta {max_precipitacion} mm.'''), dcc.Markdown(
+        f'''En esta raza se han encontrado {colores_maices}; en mazorcas que en promedio tienen {promedio_hileras} hileras por mazorca y una longitud de [promedio_longitud] cm.'''
+    ), dcc.Markdown(
         f'''
         **{df['estado'][0]}**, **{df['municipio'][0]}**, **{df['localidad'][0]}**
 
         |   Condición  | medida  | categoria |
         | :------------- | :----------: | -----------: |
         |  *Altitud*   |  {df['altitud'][0]} msnm  | ({df['cat_altitud'][0]}) |
-        | *Temperatura*       |  {df['temperatura'][0]} °C  |  ({df['cat_temperatura'][0]})   |
+        | *Temperatura*       |  {(df['temperatura'][0])} °C  |  ({df['cat_temperatura'][0]})   |
         | *Precipitación*       | {df['precipitacion'][0]} mm  |  ({df['cat_precipitacion'][0]})   |
-        | *Color de grano*       | {df['color_grano'][0]}  |     |
-        | *Número de hileras por mazorca*       |   {df['hileras_mazorca'][0]}  |     |
 
         **{df['estado'][1]}**, **{df['municipio'][1]}**, **{df['localidad'][1]}** 
 
@@ -222,8 +280,6 @@ def update_output(value):
         |  *Altitud*   |  {df['altitud'][1]} msnm  | ({df['cat_altitud'][1]}) |
         | *Temperatura*       |  {df['temperatura'][1]} °C  |  ({df['cat_temperatura'][1]})   |
         | *Precipitación*       | {df['precipitacion'][1]} mm  |  ({df['cat_precipitacion'][1]})   |
-        | *Color de grano*       | {df['color_grano'][1]}  |     |
-        | *Número de hileras por mazorca*       |   {df['hileras_mazorca'][1]}  |     |
 
         **{df['estado'][2]}**, **{df['municipio'][2]}**, **{df['localidad'][2]}**
 
@@ -232,8 +288,6 @@ def update_output(value):
         |  *Altitud*   |  {df['altitud'][2]} msnm  | ({df['cat_altitud'][2]}) |
         | *Temperatura*       |  {df['temperatura'][2]} °C  |  ({df['cat_temperatura'][2]})   |
         | *Precipitación*       | {df['precipitacion'][2]} mm  |  ({df['cat_precipitacion'][2]})   |
-        | *Color de grano*       | {df['color_grano'][2]}  |     |
-        | *Número de hileras por mazorca*       |   {df['hileras_mazorca'][2]}  |     |
 
         **{df['estado'][3]}**, **{df['municipio'][3]}**, **{df['localidad'][3]}**  
         
@@ -242,8 +296,6 @@ def update_output(value):
         |  *Altitud*   |  {df['altitud'][3]} msnm  | ({df['cat_altitud'][3]}) |
         | *Temperatura*       |   {df['temperatura'][3]} °C  |  ({df['cat_temperatura'][3]})   |
         | *Precipitación*       | {df['precipitacion'][3]} mm  |  ({df['cat_precipitacion'][3]})   |
-        | *Color de grano*       | {df['color_grano'][3]}  |     |
-        | *Número de hileras por mazorca*       |   {df['hileras_mazorca'][3]}  |     |
 
         **{df['estado'][4]}**, **{df['municipio'][4]}**, **{df['localidad'][4]}**
 
@@ -252,8 +304,6 @@ def update_output(value):
         |  *Altitud*   |  {df['altitud'][4]} msnm  | ({df['cat_altitud'][4]}) |
         | *Temperatura*       |   {df['temperatura'][4]} °C  |  ({df['cat_temperatura'][4]})   |
         | *Precipitación*       | {df['precipitacion'][4]} mm  |  ({df['cat_precipitacion'][4]})   |
-        | *Color de grano*       | {df['color_grano'][4]}  |     |
-        | *Número de hileras por mazorca*       |   {df['hileras_mazorca'][4]}  |     |
 
         **{df['estado'][5]}**, **{df['municipio'][5]}**, **{df['localidad'][5]}**
 
@@ -262,8 +312,6 @@ def update_output(value):
         |  *Altitud*   |  {df['altitud'][5]} msnm  | ({df['cat_altitud'][5]}) |
         | *Temperatura*       |   {df['temperatura'][5]} °C  |  ({df['cat_temperatura'][5]})   |
         | *Precipitación*       | {df['precipitacion'][5]} mm  |  ({df['cat_precipitacion'][5]})   |
-        | *Color de grano*       | {df['color_grano'][5]}  |     |
-        | *Número de hileras por mazorca*       |   {df['hileras_mazorca'][5]}  |     |
 
         **{df['estado'][6]}**, **{df['municipio'][6]}**, **{df['localidad'][6]}**     
 
@@ -272,8 +320,6 @@ def update_output(value):
         |  *Altitud*   |  {df['altitud'][6]} msnm  | ({df['cat_altitud'][6]}) |
         | *Temperatura*       |   {df['temperatura'][6]} °C  |  ({df['cat_temperatura'][6]})   |
         | *Precipitación*       | {df['precipitacion'][6]} mm  |  ({df['cat_precipitacion'][6]})   |
-        | *Color de grano*       | {df['color_grano'][6]}  |     |
-        | *Número de hileras por mazorca*       |   {df['hileras_mazorca'][6]}  |     |
 
         **{df['estado'][7]}**, **{df['municipio'][7]}**, **{df['localidad'][7]}**     
 
@@ -282,8 +328,6 @@ def update_output(value):
         |  *Altitud*   |  {df['altitud'][7]} msnm  | ({df['cat_altitud'][7]}) |
         | *Temperatura*       |   {df['temperatura'][7]} °C  |  ({df['cat_temperatura'][7]})   |
         | *Precipitación*       |  {df['precipitacion'][7]} mm  |  ({df['cat_precipitacion'][7]})   |
-        | *Color de grano*       | {df['color_grano'][7]}  |     |
-        | *Número de hileras por mazorca*       |   {df['hileras_mazorca'][7]}  |     |
 
         **{df['estado'][8]}**, **{df['municipio'][8]}**, **{df['localidad'][8]}**     
 
@@ -292,8 +336,6 @@ def update_output(value):
         |  *Altitud*   |  {df['altitud'][8]} msnm  | ({df['cat_altitud'][8]}) |
         | *Temperatura*       |   {df['temperatura'][8]} °C  |  ({df['cat_temperatura'][8]})   |
         | *Precipitación*       | {df['precipitacion'][8]} mm  |  ({df['cat_precipitacion'][8]})   |
-        | *Color de grano*       | {df['color_grano'][8]}  |     |
-        | *Número de hileras por mazorca*       |   {df['hileras_mazorca'][8]}  |     |
 
         **{df['estado'][9]}**, **{df['municipio'][9]}**, **{df['localidad'][9]}** 
 
@@ -314,9 +356,7 @@ def update_output(value):
     [Input(component_id='pandas-dropdown-2', component_property='value'),
     Input(component_id='radio-conditions', component_property='value')]
 )
-#def callback_func(search):
-    # here you can use the pathname however, just like a normal function input
- #   print(search)
+
 
 #Función para el mapa 
 def update_map(column_chosen, condition_chosen):
@@ -351,13 +391,13 @@ def update_map(column_chosen, condition_chosen):
     df = pd.DataFrame.from_dict(complete_dict)
     fig1 = px.scatter_mapbox(df, lat="latitud", lon="longitud", hover_data={'latitud':False, 'longitud':False, 'municipio':True}, color = condition_chosen,
                             color_continuous_scale=color_scale, zoom=4, height=500, range_color = (x_min, x_max))
-    fig1.update_layout(mapbox_style="open-street-map")
+    fig1.update_layout(mapbox_style="carto-darkmatter")
     fig1.update_layout(margin={"r":0,"t":0,"l":0,"b":0})
     fig1.update_coloraxes(showscale=False)
 
-    fig2 = px.strip(df, x=condition_chosen, stripmode='overlay', range_x= (x_min, x_max), color_discrete_sequence=n_colors('rgb(0, 0, 0)', 'rgb(255, 255, 255)', 4, colortype = 'rgb'))
+    fig2 = px.strip(df, x=condition_chosen, stripmode='group', range_x= (x_min, x_max), color_discrete_sequence=n_colors('rgb(0, 0, 0)', 'rgb(255, 255, 255)', 4, colortype = 'rgb'))
     fig2.update_layout(margin={"r":20,"t":40,"l":40,"b":40})
-    fig2.update_layout(height= 150)
+    fig2.update_layout(height= 200)
     fig2.add_layout_image(
         dict(
             source='data:image/png;base64,{}'.format(fondo.decode()),
