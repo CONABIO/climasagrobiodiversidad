@@ -1,3 +1,4 @@
+from pydoc import visiblename
 from re import search
 import dash_leaflet as dl
 import dash_leaflet.express as dlx
@@ -13,6 +14,7 @@ import flask
 from plotly.colors import n_colors
 import numpy as np
 import math 
+import random
 #from selenium import webdriver
 #from selenium.webdriver import FirefoxOptions
 
@@ -109,7 +111,14 @@ app.layout = make_layout
     [Input('url', 'pathname')])
 def callback_func(pathname):
     # here you can use the pathname however, just like a normal function input
-    print(flask.request.url_root)
+    print('hola')
+
+@app.callback(Output("url", "pathname"), Input("pandas-dropdown-2", "value"))
+def update_url_on_dropdown_change(dropdown_value):
+    taxon_id=df_taxons.loc[df_taxons['taxon simple']== dropdown_value, 'taxon_id'].values[0]
+    url_taxon='?id='+taxon_id
+    print(flask.request.base_url)
+    return url_taxon
 
 @app.callback(Output("loading-output-1", "children"), [Input("pandas-dropdown-2", "value")])
 
@@ -154,12 +163,8 @@ def update_output(value):
             escala_altitud = 'alta'
         return escala_altitud
     df['cat_altitud']= df['altitud'].apply(altitud)
-    if mean_altitud < 1200:
-        escala_altitud = 'bajas'
-    elif 1200 <= mean_altitud < 1800:
-        escala_altitud = 'de mediana altitud'
-    else:
-        escala_altitud = 'altas'
+    escala_altitud = altitud(mean_altitud)
+   
     min_altitud = df['altitud'].min()
     max_altitud = df['altitud'].max()
     
@@ -177,16 +182,7 @@ def update_output(value):
             escala_temperatura = 'muy caliente'
         return escala_temperatura
     df['cat_temperatura']= df['temperatura'].apply(temperatura)
-    if mean_temperatura < 18:
-        escala_temperatura = 'fría'
-    elif 18 <= mean_temperatura <= 21:
-        escala_temperatura = 'templada'
-    elif 21 < mean_temperatura <= 25:
-        escala_temperatura = 'semi-caliente'
-    elif 25 < mean_temperatura <= 27:
-        escala_temperatura = 'caliente'
-    else:
-        escala_temperatura = 'muy caliente'
+    escala_temperatura = temperatura(mean_temperatura)
     
     if df['temperatura'].isnull().sum() == len(df['temperatura']): 
         min_temperatura = '(no disponible)'
@@ -210,17 +206,7 @@ def update_output(value):
             escala_precipitacion = 'muy abundantes'
         return escala_precipitacion
     df['cat_precipitacion']= df['precipitacion'].apply(precipitacion)
-    if mean_precipitacion < 450:
-        escala_precipitacion = 'escasas'
-    elif 450 <= mean_precipitacion <= 650:
-        escala_precipitacion = 'poco abundantes'
-    elif 650 < mean_precipitacion <= 850:
-        escala_precipitacion = 'intermedias'
-    elif 850 < mean_precipitacion <= 1360:
-        escala_precipitacion = 'abundantes'
-    else:
-        escala_precipitacion = 'muy abundantes'
-    
+    escala_precipitacion = precipitacion(mean_precipitacion)
 
     if df['precipitacion'].isnull().sum() == len(df['precipitacion']): 
         min_precipitacion = '(no disponible)'
@@ -256,20 +242,29 @@ def update_output(value):
         colores_maices = colores_maices + color + ', '
     colores_maices =colores_maices[:-2]
 
+    if len(colores_maices) == 11 and promedio_hileras == '(no disponible)':
+        texto = 'En esta raza se ha encontrado una longitud de [promedio_longitud] cm.'
+    elif len(colores_maices) == 11 and promedio_hileras != '(no disponible)':
+        texto = f'En esta raza se han encontrado mazorcas que en promedio tienen {promedio_hileras} hileras por mazorca y una longitud de [promedio_longitud] cm.'
+    elif len(colores_maices) != 11 and promedio_hileras != '(no disponible)':
+        texto = f'En esta raza se han encontrado {colores_maices}; en mazorcas que en promedio tienen {promedio_hileras} hileras por mazorca y una longitud de [promedio_longitud] cm.'
+    elif len(colores_maices) != 11 and promedio_hileras == '(no disponible)':  
+        texto = f'En esta raza se han encontrado {colores_maices} y una longitud de [promedio_longitud] cm.'
+
 
     df= df.round() 
 
-    return dcc.Markdown (f'''El {value} se cultiva en general en tierras {escala_altitud} desde {min_altitud} hasta {max_altitud} metros sobre el nivel del mar (msnm). 
+    return dcc.Markdown (f'''El {value} se cultiva en general en tierras {escala_altitud} desde {min_altitud:,} hasta {max_altitud:,} metros sobre el nivel del mar (msnm). 
     Se cultiva en lugares donde durante la época de temporal la temperatura es {escala_temperatura}, con temperaturas que van desde {min_temperatura} °C hasta {max_temperatura} 
     ºC y donde las lluvias son {escala_precipitacion}, con cantidades que van desde {min_precipitacion} mm hasta {max_precipitacion} mm.'''), dcc.Markdown(
-        f'''En esta raza se han encontrado {colores_maices}; en mazorcas que en promedio tienen {promedio_hileras} hileras por mazorca y una longitud de [promedio_longitud] cm.'''
+        f'''{texto}'''
     ), dcc.Markdown(
         f'''
         **{df['estado'][0]}**, **{df['municipio'][0]}**, **{df['localidad'][0]}**
 
         |   Condición  | medida  | categoria |
         | :------------- | :----------: | -----------: |
-        |  *Altitud*   |  {df['altitud'][0]} msnm  | ({df['cat_altitud'][0]}) |
+        |  *Altitud*   |  {df['altitud'][0]:,} msnm  | ({df['cat_altitud'][0]}) |
         | *Temperatura*       |  {(df['temperatura'][0])} °C  |  ({df['cat_temperatura'][0]})   |
         | *Precipitación*       | {df['precipitacion'][0]} mm  |  ({df['cat_precipitacion'][0]})   |
 
@@ -277,7 +272,7 @@ def update_output(value):
 
         |   Condición  | medida  | categoria |
         | :------------- | :----------: | -----------: |
-        |  *Altitud*   |  {df['altitud'][1]} msnm  | ({df['cat_altitud'][1]}) |
+        |  *Altitud*   |  {df['altitud'][1]:,} msnm  | ({df['cat_altitud'][1]}) |
         | *Temperatura*       |  {df['temperatura'][1]} °C  |  ({df['cat_temperatura'][1]})   |
         | *Precipitación*       | {df['precipitacion'][1]} mm  |  ({df['cat_precipitacion'][1]})   |
 
@@ -285,7 +280,7 @@ def update_output(value):
 
         |   Condición  | medida  | categoria |
         | :------------- | :----------: | -----------: |
-        |  *Altitud*   |  {df['altitud'][2]} msnm  | ({df['cat_altitud'][2]}) |
+        |  *Altitud*   |  {df['altitud'][2]:,} msnm  | ({df['cat_altitud'][2]}) |
         | *Temperatura*       |  {df['temperatura'][2]} °C  |  ({df['cat_temperatura'][2]})   |
         | *Precipitación*       | {df['precipitacion'][2]} mm  |  ({df['cat_precipitacion'][2]})   |
 
@@ -293,7 +288,7 @@ def update_output(value):
         
         |   Condición  | medida  | categoria |
         | :------------- | :----------: | -----------: |
-        |  *Altitud*   |  {df['altitud'][3]} msnm  | ({df['cat_altitud'][3]}) |
+        |  *Altitud*   |  {df['altitud'][3]:,} msnm  | ({df['cat_altitud'][3]}) |
         | *Temperatura*       |   {df['temperatura'][3]} °C  |  ({df['cat_temperatura'][3]})   |
         | *Precipitación*       | {df['precipitacion'][3]} mm  |  ({df['cat_precipitacion'][3]})   |
 
@@ -301,7 +296,7 @@ def update_output(value):
 
         |   Condición  | medida  | categoria |
         | :------------- | :----------: | -----------: |
-        |  *Altitud*   |  {df['altitud'][4]} msnm  | ({df['cat_altitud'][4]}) |
+        |  *Altitud*   |  {df['altitud'][4]:,} msnm  | ({df['cat_altitud'][4]}) |
         | *Temperatura*       |   {df['temperatura'][4]} °C  |  ({df['cat_temperatura'][4]})   |
         | *Precipitación*       | {df['precipitacion'][4]} mm  |  ({df['cat_precipitacion'][4]})   |
 
@@ -309,7 +304,7 @@ def update_output(value):
 
         |   Condición  | medida  | categoria |
         | :------------- | :----------: | -----------: |
-        |  *Altitud*   |  {df['altitud'][5]} msnm  | ({df['cat_altitud'][5]}) |
+        |  *Altitud*   |  {df['altitud'][5]:,} msnm  | ({df['cat_altitud'][5]}) |
         | *Temperatura*       |   {df['temperatura'][5]} °C  |  ({df['cat_temperatura'][5]})   |
         | *Precipitación*       | {df['precipitacion'][5]} mm  |  ({df['cat_precipitacion'][5]})   |
 
@@ -317,7 +312,7 @@ def update_output(value):
 
         |   Condición  | medida  | categoria |
         | :------------- | :----------: | -----------: |
-        |  *Altitud*   |  {df['altitud'][6]} msnm  | ({df['cat_altitud'][6]}) |
+        |  *Altitud*   |  {df['altitud'][6]:,} msnm  | ({df['cat_altitud'][6]}) |
         | *Temperatura*       |   {df['temperatura'][6]} °C  |  ({df['cat_temperatura'][6]})   |
         | *Precipitación*       | {df['precipitacion'][6]} mm  |  ({df['cat_precipitacion'][6]})   |
 
@@ -325,7 +320,7 @@ def update_output(value):
 
         |   Condición  | medida  | categoria |
         | :------------- | :----------: | -----------: |
-        |  *Altitud*   |  {df['altitud'][7]} msnm  | ({df['cat_altitud'][7]}) |
+        |  *Altitud*   |  {df['altitud'][7]:,} msnm  | ({df['cat_altitud'][7]}) |
         | *Temperatura*       |   {df['temperatura'][7]} °C  |  ({df['cat_temperatura'][7]})   |
         | *Precipitación*       |  {df['precipitacion'][7]} mm  |  ({df['cat_precipitacion'][7]})   |
 
@@ -333,7 +328,7 @@ def update_output(value):
 
         |   Condición  | medida  | categoria |
         | :------------- | :----------: | -----------: |
-        |  *Altitud*   |  {df['altitud'][8]} msnm  | ({df['cat_altitud'][8]}) |
+        |  *Altitud*   |  {df['altitud'][8]:,} msnm  | ({df['cat_altitud'][8]}) |
         | *Temperatura*       |   {df['temperatura'][8]} °C  |  ({df['cat_temperatura'][8]})   |
         | *Precipitación*       | {df['precipitacion'][8]} mm  |  ({df['cat_precipitacion'][8]})   |
 
@@ -341,11 +336,9 @@ def update_output(value):
 
         |   Condición  | medida  | categoria |
         | :------------- | :----------: | -----------: |
-        |  *Altitud*   |  {df['altitud'][9]} msnm  | ({df['cat_altitud'][9]}) |
+        |  *Altitud*   |  {df['altitud'][9]:,} msnm  | ({df['cat_altitud'][9]}) |
         | *Temperatura*       |   {df['temperatura'][9]} °C  |  ({df['cat_temperatura'][9]})   |
         | *Precipitación*       | {df['precipitacion'][9]} mm  |  ({df['cat_precipitacion'][9]})   |
-        | *Color de grano*       | {df['color_grano'][9]}  |     |
-        | *Número de hileras por mazorca*       |   {df['hileras_mazorca'][9]}  |     |
         '''
     )
     
@@ -391,13 +384,23 @@ def update_map(column_chosen, condition_chosen):
     df = pd.DataFrame.from_dict(complete_dict)
     fig1 = px.scatter_mapbox(df, lat="latitud", lon="longitud", hover_data={'latitud':False, 'longitud':False, 'municipio':True}, color = condition_chosen,
                             color_continuous_scale=color_scale, zoom=4, height=500, range_color = (x_min, x_max))
-    fig1.update_layout(mapbox_style="carto-darkmatter")
+    fig1.update_layout(mapbox_style="carto-darkmatter")#stamen-terrain, carto-positron, open-street-map, carto-darkmatter
     fig1.update_layout(margin={"r":0,"t":0,"l":0,"b":0})
     fig1.update_coloraxes(showscale=False)
 
-    fig2 = px.strip(df, x=condition_chosen, stripmode='group', range_x= (x_min, x_max), color_discrete_sequence=n_colors('rgb(0, 0, 0)', 'rgb(255, 255, 255)', 4, colortype = 'rgb'))
+    random_num = []
+    random.seed(0)
+    for i in range(len(df)):
+        random_num.append(random.uniform(0.7, 1.5))
+
+    df['random']=random_num
+
+    fig2 = px.scatter(df, x=condition_chosen, y="random", hover_data={'random':False},range_x= (x_min, x_max), range_y = (0.3, 2), color_discrete_sequence=n_colors('rgb(0, 0, 0)', 'rgb(255, 255, 255)', 4, colortype = 'rgb')) 
+
+    #fig2 = px.strip(df, x=condition_chosen, stripmode='group', range_x= (x_min, x_max), color_discrete_sequence=n_colors('rgb(0, 0, 0)', 'rgb(255, 255, 255)', 4, colortype = 'rgb'))
     fig2.update_layout(margin={"r":20,"t":40,"l":40,"b":40})
     fig2.update_layout(height= 200)
+    fig2.update_yaxes(showgrid=False, zeroline=False, visible= False)
     fig2.add_layout_image(
         dict(
             source='data:image/png;base64,{}'.format(fondo.decode()),
