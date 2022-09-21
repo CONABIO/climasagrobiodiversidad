@@ -75,8 +75,9 @@ df_taxons['taxon simple']=df_taxons['taxon'].apply(change_taxon)
 def make_layout ():
     host = flask.request.host_url if flask.has_request_context() else ''
     return html.Div([
-    html.H1('Maices en México', style={'textAlign': 'center', 'color': '#1A1A1A'}),
+    html.H1('Condiciones climáticas de las razas de maíz en México', style={'textAlign': 'center', 'color': '#1A1A1A'}),
     dcc.Graph(id='mapa'),
+    html.H3('Distribución de los puntos de colecta sobre las condiciones ambientales:', style={'textAlign': 'center', 'color': '#1A1A1A'}),
     dcc.Graph(id='strip'),
     dcc.Location(id='url', refresh=False),
     dcc.Dropdown(df_taxons['taxon simple'].unique(), 'maíz raza Blando de Sonora', id='pandas-dropdown-2', placeholder='Selecciona un tipo de maiz'),
@@ -117,7 +118,7 @@ def callback_func(pathname):
 def update_url_on_dropdown_change(dropdown_value):
     taxon_id=df_taxons.loc[df_taxons['taxon simple']== dropdown_value, 'taxon_id'].values[0]
     url_taxon='?id='+taxon_id
-    print(flask.request.base_url)
+    print(url_taxon)
     return url_taxon
 
 @app.callback(Output("loading-output-1", "children"), [Input("pandas-dropdown-2", "value")])
@@ -386,6 +387,7 @@ def update_map(column_chosen, condition_chosen):
                             color_continuous_scale=color_scale, zoom=4, height=500, range_color = (x_min, x_max))
     fig1.update_layout(mapbox_style="carto-darkmatter")#stamen-terrain, carto-positron, open-street-map, carto-darkmatter
     fig1.update_layout(margin={"r":0,"t":0,"l":0,"b":0})
+    fig1.update_layout(height= 300)
     fig1.update_coloraxes(showscale=False)
 
     random_num = []
@@ -395,7 +397,7 @@ def update_map(column_chosen, condition_chosen):
 
     df['random']=random_num
 
-    fig2 = px.scatter(df, x=condition_chosen, y="random", hover_data={'random':False},range_x= (x_min, x_max), range_y = (0.3, 2), color_discrete_sequence=n_colors('rgb(0, 0, 0)', 'rgb(255, 255, 255)', 4, colortype = 'rgb')) 
+    fig2 = px.scatter(df, x=condition_chosen, y="random", hover_data={'random':False, 'municipio':True},range_x= (x_min, x_max), range_y = (0.3, 2), color_discrete_sequence=n_colors('rgb(0, 0, 0)', 'rgb(255, 255, 255)', 4, colortype = 'rgb')) 
 
     #fig2 = px.strip(df, x=condition_chosen, stripmode='group', range_x= (x_min, x_max), color_discrete_sequence=n_colors('rgb(0, 0, 0)', 'rgb(255, 255, 255)', 4, colortype = 'rgb'))
     fig2.update_layout(margin={"r":20,"t":40,"l":40,"b":40})
