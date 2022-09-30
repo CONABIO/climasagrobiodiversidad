@@ -15,6 +15,12 @@ from plotly.colors import n_colors
 import numpy as np
 import math 
 import random
+from flask import send_from_directory
+from flask import Flask
+import dash_bootstrap_components as dbc
+
+server = Flask(__name__)
+
 #from selenium import webdriver
 #from selenium.webdriver import FirefoxOptions
 
@@ -75,22 +81,42 @@ df_taxons['taxon simple']=df_taxons['taxon'].apply(change_taxon)
 def make_layout ():
     host = flask.request.host_url if flask.has_request_context() else ''
     return html.Div([
-    html.H1('Condiciones climáticas de las razas de maíz en México', style={'textAlign': 'center', 'color': '#1A1A1A'}),
-    dcc.Graph(id='mapa'),
-    html.H3('Distribución de los puntos de colecta sobre las condiciones ambientales:', style={'textAlign': 'center', 'color': '#1A1A1A'}),
-    dcc.Graph(id='strip'),
-    dcc.Location(id='url', refresh=False),
-    dcc.Dropdown(df_taxons['taxon simple'].unique(), 'maíz raza Blando de Sonora', id='pandas-dropdown-2', placeholder='Selecciona un tipo de maiz'),
-    dcc.RadioItems([
-        {'label' : 'Altitud', 'value' : 'altitud'},
-        {'label' : 'Temperatura', 'value' : 'temperatura'},
-        {'label' : 'Precipitación', 'value' : 'precipitacion'}
-    ], 'altitud', id='radio-conditions'),
-    dcc.Loading(id= 'loading-1', type='dot', children=html.Div(id='loading-output-1'), fullscreen= True),
+        dbc.NavbarSimple(
+            children=[
+                dbc.NavItem(dbc.NavLink("Mapa", href="#")),
+                dbc.NavItem(dbc.NavLink("Maíces", href="http://app-siagro.conabio.gob.mx/maices/")),
+                dbc.NavItem(dbc.NavLink("Contacto", href="http://app-siagro.conabio.gob.mx/maices#contacto/")),
+                dbc.NavItem(dbc.NavLink("Ayuda", href="http://app-siagro.conabio.gob.mx/maices#ayuda/")),
+            ],
+            color="dark",
+            dark=True,
+            fixed= "top",
+            links_left= True,
+        ),
+        html.Div([
+            html.H2('Condiciones climáticas de las razas de maíz en México', style={'textAlign': 'center', 'color': '#343a40', 'font-family': ['system-ui','-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', 'sans-serif', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol']}),
+            dcc.Graph(id='mapa'),
+            html.H3('Distribución de los puntos de colecta sobre las condiciones ambientales:', style={'textAlign': 'center', 'color': '#343a40','margin-top':'20px','font-family': ['system-ui','-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', 'sans-serif', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol']}),
+            dcc.Graph(id='strip'),
+            
+            dcc.Location(id='url', refresh=False),
+            html.Div(dcc.Dropdown(df_taxons['taxon simple'].unique(), 'maíz raza Blando de Sonora', id='pandas-dropdown-2', placeholder='Selecciona un tipo de maiz'),style={'margin-top':'20px'}),
+            dcc.RadioItems(
+                options=[
+                {'label' : ' Altitud ', 'value' : 'altitud'},
+                {'label' : ' Temperatura ', 'value' : 'temperatura'},
+                {'label' : ' Precipitación ', 'value' : 'precipitacion'},
+                ], value='altitud', id='radio-conditions', style={'textAlign':'center','margin-top':'20px'}),
+        ],style={'background-color':'rgba(254, 254, 255, 0.7)','padding':'30px'}),
+        
+    dcc.Loading(id= 'loading-1', type='dot', 
+    children=html.Div(id='loading-output-1',style={'background-color':'#2A3C24','padding':'30px', 'color': 'white'}), 
+    fullscreen= True),
     html.Div(id='pandas-output-container-2')
-])
+],style={'background-image':'url("/assets/focales.jpg")','width':'102%','height':'100%','background-attachment': 'fixed','margin-top':'10px','margin-left':'-10px','margin-bottom':'-10px', 'padding-top':'50px'})
 
-app = Dash(__name__)
+app = Dash(server=server,external_stylesheets=[dbc.themes.BOOTSTRAP])
+app.title = 'Mapa SIAgro' 
 app.layout = make_layout
 #app.layout = html.Div([
  #   html.H1('Maices en México', style={'textAlign': 'center', 'color': '#1A1A1A'}),
@@ -114,12 +140,12 @@ def callback_func(pathname):
     # here you can use the pathname however, just like a normal function input
     print('hola')
 
-@app.callback(Output("url", "pathname"), Input("pandas-dropdown-2", "value"))
-def update_url_on_dropdown_change(dropdown_value):
-    taxon_id=df_taxons.loc[df_taxons['taxon simple']== dropdown_value, 'taxon_id'].values[0]
-    url_taxon='?id='+taxon_id
-    print(url_taxon)
-    return url_taxon
+#@app.callback(Output("url", "pathname"), Input("pandas-dropdown-2", "value"))
+#def update_url_on_dropdown_change(dropdown_value):
+#    taxon_id=df_taxons.loc[df_taxons['taxon simple']== dropdown_value, 'taxon_id'].values[0]
+#    url_taxon='?id='+taxon_id
+#    print(url_taxon)
+#    return url_taxon
 
 @app.callback(Output("loading-output-1", "children"), [Input("pandas-dropdown-2", "value")])
 
@@ -255,93 +281,60 @@ def update_output(value):
 
     df= df.round() 
 
-    return dcc.Markdown (f'''El {value} se cultiva en general en tierras {escala_altitud} desde {min_altitud:,} hasta {max_altitud:,} metros sobre el nivel del mar (msnm). 
+    lista=[]
+    encabezados=[]
+
+    for i in range(0,10):
+        encabezado=df['estado'][i] + ", " + df['municipio'][i] + ", " + df['localidad'][i].upper()
+        aux = pd.DataFrame(
+            {
+                "Condición": ["Altitud", "Temperatura", "Precipitación"],
+                "Medida": [[df['altitud'][i], " msnm"], [df['temperatura'][i], " °C"] , [df['precipitacion'][i], " mm"] ],
+                "Categoría": [df['cat_altitud'][i], df['cat_temperatura'][i], df['cat_precipitacion'][i]],
+            }
+        )
+
+        lista.append(aux)
+        encabezados.append(encabezado)
+
+    return (dcc.Markdown (f'''El {value} se cultiva en general en tierras {escala_altitud} desde {min_altitud:,} hasta {max_altitud:,} metros sobre el nivel del mar (msnm). 
     Se cultiva en lugares donde durante la época de temporal la temperatura es {escala_temperatura}, con temperaturas que van desde {min_temperatura} °C hasta {max_temperatura} 
-    ºC y donde las lluvias son {escala_precipitacion}, con cantidades que van desde {min_precipitacion} mm hasta {max_precipitacion} mm.'''), dcc.Markdown(
+    ºC y donde las lluvias son {escala_precipitacion}, con cantidades que van desde {min_precipitacion} mm hasta {max_precipitacion} mm.'''), 
+    dcc.Markdown(
         f'''{texto}'''
     ), dcc.Markdown(
-        f'''
-        **{df['estado'][0]}**, **{df['municipio'][0]}**, **{df['localidad'][0]}**
-
-        |   Condición  | medida  | categoria |
-        | :------------- | :----------: | -----------: |
-        |  *Altitud*   |  {df['altitud'][0]:,} msnm  | ({df['cat_altitud'][0]}) |
-        | *Temperatura*       |  {(df['temperatura'][0])} °C  |  ({df['cat_temperatura'][0]})   |
-        | *Precipitación*       | {df['precipitacion'][0]} mm  |  ({df['cat_precipitacion'][0]})   |
-
-        **{df['estado'][1]}**, **{df['municipio'][1]}**, **{df['localidad'][1]}** 
-
-        |   Condición  | medida  | categoria |
-        | :------------- | :----------: | -----------: |
-        |  *Altitud*   |  {df['altitud'][1]:,} msnm  | ({df['cat_altitud'][1]}) |
-        | *Temperatura*       |  {df['temperatura'][1]} °C  |  ({df['cat_temperatura'][1]})   |
-        | *Precipitación*       | {df['precipitacion'][1]} mm  |  ({df['cat_precipitacion'][1]})   |
-
-        **{df['estado'][2]}**, **{df['municipio'][2]}**, **{df['localidad'][2]}**
-
-        |   Condición  | medida  | categoria |
-        | :------------- | :----------: | -----------: |
-        |  *Altitud*   |  {df['altitud'][2]:,} msnm  | ({df['cat_altitud'][2]}) |
-        | *Temperatura*       |  {df['temperatura'][2]} °C  |  ({df['cat_temperatura'][2]})   |
-        | *Precipitación*       | {df['precipitacion'][2]} mm  |  ({df['cat_precipitacion'][2]})   |
-
-        **{df['estado'][3]}**, **{df['municipio'][3]}**, **{df['localidad'][3]}**  
-        
-        |   Condición  | medida  | categoria |
-        | :------------- | :----------: | -----------: |
-        |  *Altitud*   |  {df['altitud'][3]:,} msnm  | ({df['cat_altitud'][3]}) |
-        | *Temperatura*       |   {df['temperatura'][3]} °C  |  ({df['cat_temperatura'][3]})   |
-        | *Precipitación*       | {df['precipitacion'][3]} mm  |  ({df['cat_precipitacion'][3]})   |
-
-        **{df['estado'][4]}**, **{df['municipio'][4]}**, **{df['localidad'][4]}**
-
-        |   Condición  | medida  | categoria |
-        | :------------- | :----------: | -----------: |
-        |  *Altitud*   |  {df['altitud'][4]:,} msnm  | ({df['cat_altitud'][4]}) |
-        | *Temperatura*       |   {df['temperatura'][4]} °C  |  ({df['cat_temperatura'][4]})   |
-        | *Precipitación*       | {df['precipitacion'][4]} mm  |  ({df['cat_precipitacion'][4]})   |
-
-        **{df['estado'][5]}**, **{df['municipio'][5]}**, **{df['localidad'][5]}**
-
-        |   Condición  | medida  | categoria |
-        | :------------- | :----------: | -----------: |
-        |  *Altitud*   |  {df['altitud'][5]:,} msnm  | ({df['cat_altitud'][5]}) |
-        | *Temperatura*       |   {df['temperatura'][5]} °C  |  ({df['cat_temperatura'][5]})   |
-        | *Precipitación*       | {df['precipitacion'][5]} mm  |  ({df['cat_precipitacion'][5]})   |
-
-        **{df['estado'][6]}**, **{df['municipio'][6]}**, **{df['localidad'][6]}**     
-
-        |   Condición  | medida  | categoria |
-        | :------------- | :----------: | -----------: |
-        |  *Altitud*   |  {df['altitud'][6]:,} msnm  | ({df['cat_altitud'][6]}) |
-        | *Temperatura*       |   {df['temperatura'][6]} °C  |  ({df['cat_temperatura'][6]})   |
-        | *Precipitación*       | {df['precipitacion'][6]} mm  |  ({df['cat_precipitacion'][6]})   |
-
-        **{df['estado'][7]}**, **{df['municipio'][7]}**, **{df['localidad'][7]}**     
-
-        |   Condición  | medida  | categoria |
-        | :------------- | :----------: | -----------: |
-        |  *Altitud*   |  {df['altitud'][7]:,} msnm  | ({df['cat_altitud'][7]}) |
-        | *Temperatura*       |   {df['temperatura'][7]} °C  |  ({df['cat_temperatura'][7]})   |
-        | *Precipitación*       |  {df['precipitacion'][7]} mm  |  ({df['cat_precipitacion'][7]})   |
-
-        **{df['estado'][8]}**, **{df['municipio'][8]}**, **{df['localidad'][8]}**     
-
-        |   Condición  | medida  | categoria |
-        | :------------- | :----------: | -----------: |
-        |  *Altitud*   |  {df['altitud'][8]:,} msnm  | ({df['cat_altitud'][8]}) |
-        | *Temperatura*       |   {df['temperatura'][8]} °C  |  ({df['cat_temperatura'][8]})   |
-        | *Precipitación*       | {df['precipitacion'][8]} mm  |  ({df['cat_precipitacion'][8]})   |
-
-        **{df['estado'][9]}**, **{df['municipio'][9]}**, **{df['localidad'][9]}** 
-
-        |   Condición  | medida  | categoria |
-        | :------------- | :----------: | -----------: |
-        |  *Altitud*   |  {df['altitud'][9]:,} msnm  | ({df['cat_altitud'][9]}) |
-        | *Temperatura*       |   {df['temperatura'][9]} °C  |  ({df['cat_temperatura'][9]})   |
-        | *Precipitación*       | {df['precipitacion'][9]} mm  |  ({df['cat_precipitacion'][9]})   |
-        '''
-    )
+        f'''**{encabezados[0]}**'''),
+        dbc.Table.from_dataframe(lista[0], striped=True, bordered=True, hover=True, style={'background-color':'white'}),
+        dcc.Markdown(
+        f'''**{encabezados[1]}**'''),
+        dbc.Table.from_dataframe(lista[1], striped=True, bordered=True, hover=True, style={'background-color':'white'}),
+        dcc.Markdown(
+        f'''**{encabezados[2]}**'''),
+        dbc.Table.from_dataframe(lista[2], striped=True, bordered=True, hover=True, style={'background-color':'white'}),
+        dcc.Markdown(
+        f'''**{encabezados[3]}**'''),
+        dbc.Table.from_dataframe(lista[3], striped=True, bordered=True, hover=True, style={'background-color':'white'}),
+        dcc.Markdown(
+        f'''**{encabezados[4]}**'''),
+        dbc.Table.from_dataframe(lista[4], striped=True, bordered=True, hover=True, style={'background-color':'white'}),
+        dcc.Markdown(
+        f'''**{encabezados[5]}**'''),
+        dbc.Table.from_dataframe(lista[5], striped=True, bordered=True, hover=True, style={'background-color':'white'}),
+        dcc.Markdown(
+        f'''**{encabezados[6]}**'''),
+        dbc.Table.from_dataframe(lista[6], striped=True, bordered=True, hover=True, style={'background-color':'white'}),
+        dcc.Markdown(
+        f'''**{encabezados[7]}**'''),
+        dbc.Table.from_dataframe(lista[7], striped=True, bordered=True, hover=True, style={'background-color':'white'}),
+        dcc.Markdown(
+        f'''**{encabezados[8]}**'''),
+        dbc.Table.from_dataframe(lista[8], striped=True, bordered=True, hover=True, style={'background-color':'white'}),
+        dcc.Markdown(
+        f'''**{encabezados[9]}**'''),
+        dbc.Table.from_dataframe(lista[9], striped=True, bordered=True, hover=True, style={'background-color':'white'}))
+    
+    
+    
     
 
 @app.callback(
@@ -355,15 +348,15 @@ def update_output(value):
 #Función para el mapa 
 def update_map(column_chosen, condition_chosen):
     if condition_chosen == 'altitud':
-        image = 'altitud.png'
+        image = '/var/www/FlaskApp/FlaskApp/altitud.png'
         color_scale = 'turbid'
         x_max = 3400
     elif condition_chosen == 'temperatura':
-        image = 'temperatura.png'
+        image = '/var/www/FlaskApp/FlaskApp/temperatura.png'
         color_scale = 'RdBu'
         x_max = 40
     elif condition_chosen == 'precipitacion':
-        image = 'precipitacion.png'
+        image = '/var/www/FlaskApp/FlaskApp/precipitacion.png'
         color_scale = 'YlGnBu'
         x_max = 1500
     x_min= 0
@@ -400,7 +393,7 @@ def update_map(column_chosen, condition_chosen):
     fig2 = px.scatter(df, x=condition_chosen, y="random", hover_data={'random':False, 'municipio':True},range_x= (x_min, x_max), range_y = (0.3, 2), color_discrete_sequence=n_colors('rgb(0, 0, 0)', 'rgb(255, 255, 255)', 4, colortype = 'rgb')) 
 
     #fig2 = px.strip(df, x=condition_chosen, stripmode='group', range_x= (x_min, x_max), color_discrete_sequence=n_colors('rgb(0, 0, 0)', 'rgb(255, 255, 255)', 4, colortype = 'rgb'))
-    fig2.update_layout(margin={"r":20,"t":40,"l":40,"b":40})
+    fig2.update_layout(margin={"r":20,"t":40,"l":20,"b":40})
     fig2.update_layout(height= 200)
     fig2.update_yaxes(showgrid=False, zeroline=False, visible= False)
     fig2.add_layout_image(
@@ -416,6 +409,7 @@ def update_map(column_chosen, condition_chosen):
             layer="below")
         )    
     return fig1, fig2
-    
 
-app.run_server(debug=True, use_reloader=False) 
+
+if __name__ == "__main__":
+    app.run()
