@@ -16,16 +16,10 @@ import numpy as np
 import math 
 import random
 from flask import send_from_directory
-from flask import Flask
+from flask import Flask, request
 import dash_bootstrap_components as dbc
 
 server = Flask(__name__)
-
-#from selenium import webdriver
-#from selenium.webdriver import FirefoxOptions
-
-#opts = FirefoxOptions()
-#opts.add_argument("--headless")
 
 #Query para obtener cada uno de los distintos taxones
 my_query= """{
@@ -75,23 +69,23 @@ def change_taxon (x):
 
 df_taxons['taxon simple']=df_taxons['taxon'].apply(change_taxon)
 
-#image= 'fondo.png'
-#fondo = base64.b64encode(open(image, 'rb').read())
-
 def make_layout ():
     host = flask.request.host_url if flask.has_request_context() else ''
     return html.Div([
+        dcc.Location(id='url', refresh=False),
         dbc.NavbarSimple(
+            
             children=[
-                dbc.NavItem(dbc.NavLink("Mapa", href="#")),
-                dbc.NavItem(dbc.NavLink("Maíces", href="http://app-siagro.conabio.gob.mx/maices/")),
-                dbc.NavItem(dbc.NavLink("Contacto", href="http://app-siagro.conabio.gob.mx/maices#contacto/")),
-                dbc.NavItem(dbc.NavLink("Ayuda", href="http://app-siagro.conabio.gob.mx/maices#ayuda/")),
+                dbc.NavItem(dbc.NavLink("Mapa", href="/", active=True, style={'padding-left':'10px','margin-top':'5px','margin-bottom':'5px','textAlign':'center',})),
+                dbc.NavItem(dbc.NavLink("Maíces", href="http://app-siagro.conabio.gob.mx/maices/", target="_blank", style={'padding-left':'10px','margin-top':'5px','margin-bottom':'5px','textAlign':'center'})),
+                dbc.NavItem(dbc.NavLink("Contacto", href="http://app-siagro.conabio.gob.mx/maices#contacto/", target="_blank", style={'padding-left':'10px','margin-top':'5px','margin-bottom':'5px','textAlign':'center'})),
+                dbc.NavItem(dbc.NavLink("Ayuda", href="http://app-siagro.conabio.gob.mx/maices#ayuda/", target="_blank", style={'padding-left':'10px','margin-top':'5px','margin-bottom':'5px','textAlign':'center'})),
             ],
             color="dark",
             dark=True,
             fixed= "top",
-            links_left= True,
+            class_name="pill",
+            links_left=True,
         ),
         html.Div([
             html.H2('Condiciones climáticas de las razas de maíz en México', style={'textAlign': 'center', 'color': '#343a40', 'font-family': ['system-ui','-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', 'sans-serif', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol']}),
@@ -99,7 +93,7 @@ def make_layout ():
             html.H3('Distribución de los puntos de colecta sobre las condiciones ambientales:', style={'textAlign': 'center', 'color': '#343a40','margin-top':'20px','font-family': ['system-ui','-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', 'sans-serif', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol']}),
             dcc.Graph(id='strip'),
             
-            dcc.Location(id='url', refresh=False),
+            
             html.Div(dcc.Dropdown(df_taxons['taxon simple'].unique(), 'maíz raza Blando de Sonora', id='pandas-dropdown-2', placeholder='Selecciona un tipo de maiz'),style={'margin-top':'20px'}),
             dcc.RadioItems(
                 options=[
@@ -113,48 +107,27 @@ def make_layout ():
     children=html.Div(id='loading-output-1',style={'background-color':'#2A3C24','padding':'30px', 'color': 'white'}), 
     fullscreen= True),
     html.Div(id='pandas-output-container-2')
-],style={'background-image':'url("/assets/focales.jpg")','width':'102%','height':'100%','background-attachment': 'fixed','margin-top':'10px','margin-left':'-10px','margin-bottom':'-10px', 'padding-top':'50px'})
+],style={'background-image':'url("/assets/focales.jpg")','width':'102%','height':'100%','background-attachment': 'fixed','margin-top':'5px','margin-left':'-10px','margin-bottom':'-10px', 'padding-top':'50px'})
 
 app = Dash(server=server,external_stylesheets=[dbc.themes.BOOTSTRAP])
 app.title = 'Mapa SIAgro' 
 app.layout = make_layout
-#app.layout = html.Div([
- #   html.H1('Maices en México', style={'textAlign': 'center', 'color': '#1A1A1A'}),
- #   dcc.Graph(id='mapa'),
- #   dcc.Graph(id='strip'),
- #   dcc.Location(id='url', refresh=True),
- #   dcc.Dropdown(df_taxons['taxon simple'].unique(), 'maíz raza Blando de Sonora', id='pandas-dropdown-2', placeholder='Selecciona un tipo de maiz'),
- #   dcc.RadioItems([
- #       {'label' : 'Altitud', 'value' : 'altitud'},
- #       {'label' : 'Temperatura', 'value' : 'temperatura'},
- #       {'label' : 'Precipitación', 'value' : 'precipitacion'}
- #   ], 'altitud', id='radio-conditions'),
- #   dcc.Loading(id= 'loading-1', type='dot', children=html.Div(id='loading-output-1'), fullscreen= True),
- #   html.Div(id='pandas-output-container-2')
-#])
 
-@app.callback(
-    Output('pandas-output-container-2', 'children'),
-    [Input('url', 'pathname')])
-def callback_func(pathname):
-    # here you can use the pathname however, just like a normal function input
-    print('hola')
-
-#@app.callback(Output("url", "pathname"), Input("pandas-dropdown-2", "value"))
-#def update_url_on_dropdown_change(dropdown_value):
-#    taxon_id=df_taxons.loc[df_taxons['taxon simple']== dropdown_value, 'taxon_id'].values[0]
-#    url_taxon='?id='+taxon_id
-#    print(url_taxon)
-#    return url_taxon
-
-@app.callback(Output("loading-output-1", "children"), [Input("pandas-dropdown-2", "value")])
+@app.callback(Output("loading-output-1", "children"), [Input("pandas-dropdown-2", "value"),Input('url', 'pathname')])
 
 #Función para el texto y la tabla 
-def update_output(value):
-    taxon_id=df_taxons.loc[df_taxons['taxon simple']== value, 'taxon_id'].values[0]
+def update_output(value,pathname):
+    if pathname=='/':
+        taxon_id=df_taxons.loc[df_taxons['taxon simple']== value, 'taxon_id'].values[0]
+    else:
+        taxon_id=pathname[4:]
     new_query = '{\n  taxons(pagination:{limit:1} search:{field:taxon_id value:"%' + taxon_id +'%" operator:iLike}){\n    taxon_id\n    taxon\n    registroConnection(pagination:{first:1000}){\n      edges{\n        node{\n          id\n          sitio{\n            altitud\n            estado\n            municipio\n            localidad\n            condiciones_sitioFilter(pagination:{limit:2}){\n              sitio_id\n              condicion\n              valor\n              unidad\n              nombre_corto\n              fuente\n            }\n          }\n          caracteristicas_cualitativasFilter(pagination:{limit:10} search:{field:nombre_corto value:"color_grano" operator:eq }){\n            nombre_corto\n            valor\n          }\n          caracteristicas_cuantitativasFilter(pagination:{limit:10} search:{field:nombre_corto value:"hileras_mazorca" operator:eq }){\n            nombre_corto\n            valor\n          }\n          }\n        }\n      }\n    }\n  } '
     result= run_query(url, new_query, statusCode)    
     complete_dict=[]
+    value = result['data']['taxons'][0]['taxon']
+    value = value.replace("Zea mays subsp. mays", "maíz")
+    value = value.replace("Zea mays subsp. mexicana", "teocintle subespecie mexicana")
+    value = value.replace("Zea mays subsp. parviglumis", "teocintle subespecie parviglumis")
     for i in range (len(result['data']['taxons'][0]['registroConnection']['edges'])):
         sitio = result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['sitio']
         if len(result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['sitio']['condiciones_sitioFilter']) == 0:
@@ -341,12 +314,13 @@ def update_output(value):
     Output(component_id='mapa', component_property='figure'),
     Output(component_id='strip', component_property='figure'),
     [Input(component_id='pandas-dropdown-2', component_property='value'),
-    Input(component_id='radio-conditions', component_property='value')]
+    Input(component_id='radio-conditions', component_property='value'),
+    Input('url', 'pathname')]
 )
 
 
 #Función para el mapa 
-def update_map(column_chosen, condition_chosen):
+def update_map(column_chosen, condition_chosen, pathname):
     if condition_chosen == 'altitud':
         image = '/var/www/FlaskApp/FlaskApp/altitud.png'
         color_scale = 'turbid'
@@ -361,7 +335,12 @@ def update_map(column_chosen, condition_chosen):
         x_max = 1500
     x_min= 0
     fondo = base64.b64encode(open(image, 'rb').read())
-    taxon_id=df_taxons.loc[df_taxons['taxon simple']== column_chosen, 'taxon_id'].values[0]
+    
+    if pathname=='/':
+        taxon_id=df_taxons.loc[df_taxons['taxon simple']== column_chosen, 'taxon_id'].values[0]
+    else:
+        taxon_id=pathname[4:]
+
     new_query = '{\n  taxons(pagination:{limit:1} search:{field:taxon_id value:"%' + taxon_id + '%" operator:iLike}){\n    taxon_id\n    taxon\n    registroConnection(pagination:{first:1000}){\n      edges{\n        node{\n          id\n          sitio{\n            latitud\n            longitud\n            altitud\n            estado\n            municipio\n            localidad\n            condiciones_sitioFilter(pagination:{limit:2}){\n              sitio_id\n              condicion\n              valor\n              unidad\n              nombre_corto\n              fuente\n            }\n          }\n        }\n        }\n      }\n    }\n  } '
     result= run_query(url, new_query, statusCode)    
     complete_dict=[]
@@ -391,8 +370,6 @@ def update_map(column_chosen, condition_chosen):
     df['random']=random_num
 
     fig2 = px.scatter(df, x=condition_chosen, y="random", hover_data={'random':False, 'municipio':True},range_x= (x_min, x_max), range_y = (0.3, 2), color_discrete_sequence=n_colors('rgb(0, 0, 0)', 'rgb(255, 255, 255)', 4, colortype = 'rgb')) 
-
-    #fig2 = px.strip(df, x=condition_chosen, stripmode='group', range_x= (x_min, x_max), color_discrete_sequence=n_colors('rgb(0, 0, 0)', 'rgb(255, 255, 255)', 4, colortype = 'rgb'))
     fig2.update_layout(margin={"r":20,"t":40,"l":20,"b":40})
     fig2.update_layout(height= 200)
     fig2.update_yaxes(showgrid=False, zeroline=False, visible= False)
