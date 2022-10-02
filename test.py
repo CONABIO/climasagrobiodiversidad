@@ -69,6 +69,10 @@ def change_taxon (x):
 
 df_taxons['taxon simple']=df_taxons['taxon'].apply(change_taxon)
 
+df_taxons = df_taxons.drop(df_taxons['taxon simple'].loc[df_taxons['taxon simple']=='teocintle subespecie mexicana'].index)
+df_taxons = df_taxons.drop(df_taxons['taxon simple'].loc[df_taxons['taxon simple']=='teocintle subespecie parviglumis'].index)
+df_taxons = df_taxons.reset_index(drop=True)
+
 def make_layout ():
     host = flask.request.host_url if flask.has_request_context() else ''
     return html.Div([
@@ -121,7 +125,7 @@ def update_output(value,pathname):
         taxon_id=df_taxons.loc[df_taxons['taxon simple']== value, 'taxon_id'].values[0]
     else:
         taxon_id=pathname[4:]
-    new_query = '{\n  taxons(pagination:{limit:1} search:{field:taxon_id value:"%' + taxon_id +'%" operator:iLike}){\n    taxon_id\n    taxon\n    registroConnection(pagination:{first:1000}){\n      edges{\n        node{\n          id\n          sitio{\n            altitud\n            estado\n            municipio\n            localidad\n            condiciones_sitioFilter(pagination:{limit:2}){\n              sitio_id\n              condicion\n              valor\n              unidad\n              nombre_corto\n              fuente\n            }\n          }\n          caracteristicas_cualitativasFilter(pagination:{limit:10} search:{field:nombre_corto value:"color_grano" operator:eq }){\n            nombre_corto\n            valor\n          }\n          caracteristicas_cuantitativasFilter(pagination:{limit:10} search:{field:nombre_corto value:"hileras_mazorca" operator:eq }){\n            nombre_corto\n            valor\n          }\n          }\n        }\n      }\n    }\n  } '
+    new_query = '{\n  taxons(pagination:{limit:1} search:{field:taxon_id value:"%' + taxon_id +'%" operator:iLike}){\n    taxon_id\n    taxon\n    registroConnection(pagination:{first:1000}){\n      edges{\n        node{\n          id\n          sitio{\n            altitud\n            estado\n            municipio\n            localidad\n            condiciones_sitioFilter(pagination:{limit:2}){\n              sitio_id\n              condicion\n              valor\n              unidad\n              nombre_corto\n              fuente\n            }\n          }\n          caracteristicas_cualitativasFilter(pagination:{limit:10} search:{field:nombre_corto value:"color_grano" operator:eq }){\n            nombre_corto\n            valor\n          }\n          caracteristicas_cuantitativasFilter(pagination:{limit:10}\n                search: {operator: or,\n                         search: [{field: nombre_corto,\n                          value: "hileras_mazorca",\n                          operator: eq},\n                            {field: nombre_corto,\n                             value: "longitud_mazorca",\n                             operator: eq}]\n                                                          }){\n                 nombre_corto\n                 valor\n          }\n          }\n        }\n      }\n    }\n  }\n'
     result= run_query(url, new_query, statusCode)    
     complete_dict=[]
     value = result['data']['taxons'][0]['taxon']
@@ -148,8 +152,13 @@ def update_output(value,pathname):
         if len (result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['caracteristicas_cuantitativasFilter']) == 0:
             hileras_mazorca = 'no disponible'
             sitio['hileras_mazorca']=hileras_mazorca
-        else:
+            sitio['longitud_promedio']=hileras_mazorca
+        elif len (result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['caracteristicas_cuantitativasFilter']) == 1:
             sitio['hileras_mazorca']=result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['caracteristicas_cuantitativasFilter'][0]['valor']
+            sitio['longitud_promedio']='no disponible'
+        elif len (result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['caracteristicas_cuantitativasFilter']) == 2:
+            sitio['hileras_mazorca']=result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['caracteristicas_cuantitativasFilter'][0]['valor']
+            sitio['longitud_promedio']=result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['caracteristicas_cuantitativasFilter'][1]['valor']
         del sitio['condiciones_sitioFilter']
         complete_dict.append(sitio)
     df = pd.DataFrame.from_dict(complete_dict) 
@@ -222,6 +231,12 @@ def update_output(value,pathname):
     else:
         promedio_hileras = '(no disponible)'
 
+    longitud = df[df.longitud_promedio != 'no disponible']
+    if len(longitud) !=0:
+        promedio_longitud = round(longitud['longitud_promedio'].mean())
+    else:
+        promedio_longitud = '(no disponible)'
+
     color_maices = df['color_grano']
     colores = []
     for i in color_maices:
@@ -242,14 +257,16 @@ def update_output(value,pathname):
         colores_maices = colores_maices + color + ', '
     colores_maices =colores_maices[:-2]
 
-    if len(colores_maices) == 11 and promedio_hileras == '(no disponible)':
-        texto = 'En esta raza se ha encontrado una longitud de [promedio_longitud] cm.'
-    elif len(colores_maices) == 11 and promedio_hileras != '(no disponible)':
-        texto = f'En esta raza se han encontrado mazorcas que en promedio tienen {promedio_hileras} hileras por mazorca y una longitud de [promedio_longitud] cm.'
-    elif len(colores_maices) != 11 and promedio_hileras != '(no disponible)':
-        texto = f'En esta raza se han encontrado {colores_maices}; en mazorcas que en promedio tienen {promedio_hileras} hileras por mazorca y una longitud de [promedio_longitud] cm.'
-    elif len(colores_maices) != 11 and promedio_hileras == '(no disponible)':  
-        texto = f'En esta raza se han encontrado {colores_maices} y una longitud de [promedio_longitud] cm.'
+    if len(colores_maices) == 11 and promedio_hileras == '(no disponible)' and promedio_longitud == '(no disponible)':
+        texto = ''
+    elif len(colores_maices) == 11 and promedio_hileras != '(no disponible)' and promedio_longitud != '(no disponible)':
+        texto = f'En esta raza se han encontrado mazorcas que en promedio tienen {promedio_hileras} hileras por mazorca y una longitud de {promedio_longitud} cm.'
+    elif len(colores_maices) != 11 and promedio_hileras != '(no disponible)' and promedio_longitud != '(no disponible)':
+        texto = f'En esta raza se han encontrado {colores_maices}; en mazorcas que en promedio tienen {promedio_hileras} hileras por mazorca y una longitud de {promedio_longitud} cm.'
+    elif len(colores_maices) != 11 and promedio_hileras == '(no disponible)' and promedio_longitud != '(no disponible)':  
+        texto = f'En esta raza se han encontrado {colores_maices} y una longitud de {promedio_longitud} cm.'
+    elif len(colores_maices) != 11 and promedio_hileras == '(no disponible)' and promedio_longitud == '(no disponible)':  
+        texto = f'En esta raza se han encontrado {colores_maices}.'
 
 
     df= df.round() 
