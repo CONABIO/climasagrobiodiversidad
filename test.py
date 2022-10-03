@@ -68,7 +68,6 @@ def change_taxon (x):
     return y
 
 df_taxons['taxon simple']=df_taxons['taxon'].apply(change_taxon)
-
 df_taxons = df_taxons.drop(df_taxons['taxon simple'].loc[df_taxons['taxon simple']=='teocintle subespecie mexicana'].index)
 df_taxons = df_taxons.drop(df_taxons['taxon simple'].loc[df_taxons['taxon simple']=='teocintle subespecie parviglumis'].index)
 df_taxons = df_taxons.reset_index(drop=True)
@@ -98,7 +97,7 @@ def make_layout ():
             dcc.Graph(id='strip'),
             
             
-            html.Div(dcc.Dropdown(df_taxons['taxon simple'].unique(), 'maíz raza Blando de Sonora', id='pandas-dropdown-2', placeholder='Selecciona un tipo de maiz'),style={'margin-top':'20px'}),
+            html.Div(dcc.Dropdown(df_taxons['taxon simple'].unique(), id='pandas-dropdown-2', placeholder='Selecciona un tipo de maiz'),style={'margin-top':'20px','cursor':'pointer'}),
             dcc.RadioItems(
                 options=[
                 {'label' : ' Altitud ', 'value' : 'altitud'},
@@ -117,211 +116,229 @@ app = Dash(server=server,external_stylesheets=[dbc.themes.BOOTSTRAP])
 app.title = 'Mapa SIAgro' 
 app.layout = make_layout
 
-@app.callback(Output("loading-output-1", "children"), [Input("pandas-dropdown-2", "value"),Input('url', 'pathname')])
+@app.callback(Output("url", "pathname"), [Input("pandas-dropdown-2", "value"),Input('url', 'pathname')])
+def update_url_on_dropdown_change(dropdown_value,pathname):
+
+    if pathname != "/" and dropdown_value is None:
+        pathname=pathname[0:]
+        url_taxon=pathname
+    if pathname=="/":
+        url_taxon=''
+    if dropdown_value is not None:
+        taxon_id=df_taxons.loc[df_taxons['taxon simple']== dropdown_value, 'taxon_id'].values[0]
+        url_taxon='id='+taxon_id
+    
+    return url_taxon
+
+@app.callback(Output('pandas-dropdown-2', 'value'),Output("loading-output-1", "children"), [Input("pandas-dropdown-2", "value"),Input('url', 'pathname')])
 
 #Función para el texto y la tabla 
 def update_output(value,pathname):
-    if pathname=='/':
-        taxon_id=df_taxons.loc[df_taxons['taxon simple']== value, 'taxon_id'].values[0]
-    else:
-        taxon_id=pathname[4:]
-    new_query = '{\n  taxons(pagination:{limit:1} search:{field:taxon_id value:"%' + taxon_id +'%" operator:iLike}){\n    taxon_id\n    taxon\n    registroConnection(pagination:{first:1000}){\n      edges{\n        node{\n          id\n          sitio{\n            altitud\n            estado\n            municipio\n            localidad\n            condiciones_sitioFilter(pagination:{limit:2}){\n              sitio_id\n              condicion\n              valor\n              unidad\n              nombre_corto\n              fuente\n            }\n          }\n          caracteristicas_cualitativasFilter(pagination:{limit:10} search:{field:nombre_corto value:"color_grano" operator:eq }){\n            nombre_corto\n            valor\n          }\n          caracteristicas_cuantitativasFilter(pagination:{limit:10}\n                search: {operator: or,\n                         search: [{field: nombre_corto,\n                          value: "hileras_mazorca",\n                          operator: eq},\n                            {field: nombre_corto,\n                             value: "longitud_mazorca",\n                             operator: eq}]\n                                                          }){\n                 nombre_corto\n                 valor\n          }\n          }\n        }\n      }\n    }\n  }\n'
-    result= run_query(url, new_query, statusCode)    
-    complete_dict=[]
-    value = result['data']['taxons'][0]['taxon']
-    value = value.replace("Zea mays subsp. mays", "maíz")
-    value = value.replace("Zea mays subsp. mexicana", "teocintle subespecie mexicana")
-    value = value.replace("Zea mays subsp. parviglumis", "teocintle subespecie parviglumis")
-    for i in range (len(result['data']['taxons'][0]['registroConnection']['edges'])):
-        sitio = result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['sitio']
-        if len(result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['sitio']['condiciones_sitioFilter']) == 0:
-            sitio['precipitacion'] = np.nan
-            sitio['temperatura'] = np.nan
+    if (value is not None) or (value is None and pathname!=""):
+        if pathname=='/':
+            taxon_id=df_taxons.loc[df_taxons['taxon simple']== value, 'taxon_id'].values[0]
         else:
-            sitio['precipitacion'] = result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['sitio']['condiciones_sitioFilter'][0]['valor']
-            sitio['temperatura'] = result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['sitio']['condiciones_sitioFilter'][1]['valor']
-        if len (result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['caracteristicas_cualitativasFilter']) == 0:
-            color_grano = 'no disponible'
-            sitio['color_grano']=color_grano
-        else:
-            colores = []
-            for j in range (len(result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['caracteristicas_cualitativasFilter'])):
-                #colores = colores +result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['caracteristicas_cualitativasFilter'][j]['valor'] + ', '
-                colores.append(result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['caracteristicas_cualitativasFilter'][j]['valor'])
-            sitio['color_grano']=colores
-        if len (result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['caracteristicas_cuantitativasFilter']) == 0:
-            hileras_mazorca = 'no disponible'
-            sitio['hileras_mazorca']=hileras_mazorca
-            sitio['longitud_promedio']=hileras_mazorca
-        elif len (result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['caracteristicas_cuantitativasFilter']) == 1:
-            sitio['hileras_mazorca']=result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['caracteristicas_cuantitativasFilter'][0]['valor']
-            sitio['longitud_promedio']='no disponible'
-        elif len (result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['caracteristicas_cuantitativasFilter']) == 2:
-            sitio['hileras_mazorca']=result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['caracteristicas_cuantitativasFilter'][0]['valor']
-            sitio['longitud_promedio']=result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['caracteristicas_cuantitativasFilter'][1]['valor']
-        del sitio['condiciones_sitioFilter']
-        complete_dict.append(sitio)
-    df = pd.DataFrame.from_dict(complete_dict) 
-    mean_altitud = df['altitud'].mean() 
-    def altitud (x):
-        if x < 1200:
-            escala_altitud = 'baja'
-        elif 1200 <= x < 1800:
-            escala_altitud = 'mediana altitud'
-        else:
-            escala_altitud = 'alta'
-        return escala_altitud
-    df['cat_altitud']= df['altitud'].apply(altitud)
-    escala_altitud = altitud(mean_altitud)
-   
-    min_altitud = df['altitud'].min()
-    max_altitud = df['altitud'].max()
+            taxon_id=pathname[4:]
+        new_query = '{\n  taxons(pagination:{limit:1} search:{field:taxon_id value:"%' + taxon_id +'%" operator:iLike}){\n    taxon_id\n    taxon\n    registroConnection(pagination:{first:1000}){\n      edges{\n        node{\n          id\n          sitio{\n            altitud\n            estado\n            municipio\n            localidad\n            condiciones_sitioFilter(pagination:{limit:2}){\n              sitio_id\n              condicion\n              valor\n              unidad\n              nombre_corto\n              fuente\n            }\n          }\n          caracteristicas_cualitativasFilter(pagination:{limit:10} search:{field:nombre_corto value:"color_grano" operator:eq }){\n            nombre_corto\n            valor\n          }\n          caracteristicas_cuantitativasFilter(pagination:{limit:10}\n                search: {operator: or,\n                         search: [{field: nombre_corto,\n                          value: "hileras_mazorca",\n                          operator: eq},\n                            {field: nombre_corto,\n                             value: "longitud_mazorca",\n                             operator: eq}]\n                                                          }){\n                 nombre_corto\n                 valor\n          }\n          }\n        }\n      }\n    }\n  }\n'
+        result= run_query(url, new_query, statusCode)    
+        complete_dict=[]
+        value = result['data']['taxons'][0]['taxon']
+        value = value.replace("Zea mays subsp. mays", "maíz")
+        value = value.replace("Zea mays subsp. mexicana", "teocintle subespecie mexicana")
+        value = value.replace("Zea mays subsp. parviglumis", "teocintle subespecie parviglumis")
+        for i in range (len(result['data']['taxons'][0]['registroConnection']['edges'])):
+            sitio = result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['sitio']
+            if len(result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['sitio']['condiciones_sitioFilter']) == 0:
+                sitio['precipitacion'] = np.nan
+                sitio['temperatura'] = np.nan
+            else:
+                sitio['precipitacion'] = result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['sitio']['condiciones_sitioFilter'][0]['valor']
+                sitio['temperatura'] = result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['sitio']['condiciones_sitioFilter'][1]['valor']
+            if len (result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['caracteristicas_cualitativasFilter']) == 0:
+                color_grano = 'no disponible'
+                sitio['color_grano']=color_grano
+            else:
+                colores = []
+                for j in range (len(result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['caracteristicas_cualitativasFilter'])):
+                    #colores = colores +result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['caracteristicas_cualitativasFilter'][j]['valor'] + ', '
+                    colores.append(result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['caracteristicas_cualitativasFilter'][j]['valor'])
+                sitio['color_grano']=colores
+            if len (result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['caracteristicas_cuantitativasFilter']) == 0:
+                hileras_mazorca = 'no disponible'
+                sitio['hileras_mazorca']=hileras_mazorca
+                sitio['longitud_promedio']=hileras_mazorca
+            elif len (result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['caracteristicas_cuantitativasFilter']) == 1:
+                sitio['hileras_mazorca']=result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['caracteristicas_cuantitativasFilter'][0]['valor']
+                sitio['longitud_promedio']='no disponible'
+            elif len (result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['caracteristicas_cuantitativasFilter']) == 2:
+                sitio['hileras_mazorca']=result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['caracteristicas_cuantitativasFilter'][0]['valor']
+                sitio['longitud_promedio']=result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['caracteristicas_cuantitativasFilter'][1]['valor']
+            del sitio['condiciones_sitioFilter']
+            complete_dict.append(sitio)
+        df = pd.DataFrame.from_dict(complete_dict) 
+        mean_altitud = df['altitud'].mean() 
+        def altitud (x):
+            if x < 1200:
+                escala_altitud = 'baja'
+            elif 1200 <= x < 1800:
+                escala_altitud = 'mediana altitud'
+            else:
+                escala_altitud = 'alta'
+            return escala_altitud
+        df['cat_altitud']= df['altitud'].apply(altitud)
+        escala_altitud = altitud(mean_altitud)
     
-    mean_temperatura = df['temperatura'].mean() 
-    def temperatura (x):
-        if x < 18:
-            escala_temperatura = 'fría'
-        elif 18 <= x <= 21:
-            escala_temperatura = 'templada'
-        elif 21 < x <= 25:
-            escala_temperatura = 'semi-caliente'
-        elif 25 < x <= 27:
-            escala_temperatura = 'caliente'
+        min_altitud = df['altitud'].min()
+        max_altitud = df['altitud'].max()
+        
+        mean_temperatura = df['temperatura'].mean() 
+        def temperatura (x):
+            if x < 18:
+                escala_temperatura = 'fría'
+            elif 18 <= x <= 21:
+                escala_temperatura = 'templada'
+            elif 21 < x <= 25:
+                escala_temperatura = 'semi-caliente'
+            elif 25 < x <= 27:
+                escala_temperatura = 'caliente'
+            else:
+                escala_temperatura = 'muy caliente'
+            return escala_temperatura
+        df['cat_temperatura']= df['temperatura'].apply(temperatura)
+        escala_temperatura = temperatura(mean_temperatura)
+        
+        if df['temperatura'].isnull().sum() == len(df['temperatura']): 
+            min_temperatura = '(no disponible)'
+            max_temperatura = '(no disponible)'
+            escala_temperatura= '(no disponible)'
         else:
-            escala_temperatura = 'muy caliente'
-        return escala_temperatura
-    df['cat_temperatura']= df['temperatura'].apply(temperatura)
-    escala_temperatura = temperatura(mean_temperatura)
-    
-    if df['temperatura'].isnull().sum() == len(df['temperatura']): 
-        min_temperatura = '(no disponible)'
-        max_temperatura = '(no disponible)'
-        escala_temperatura= '(no disponible)'
-    else:
-        min_temperatura = round(df['temperatura'].min())
-        max_temperatura = round(df['temperatura'].max())
+            min_temperatura = round(df['temperatura'].min())
+            max_temperatura = round(df['temperatura'].max())
 
-    mean_precipitacion = df['precipitacion'].mean() 
-    def precipitacion (x):
-        if x < 450:
-            escala_precipitacion = 'escasas'
-        elif 450 <= x <= 650:
-            escala_precipitacion = 'poco abundantes'
-        elif 650 < x <= 850:
-            escala_precipitacion = 'intermedias'
-        elif 850 < x <= 1360:
-            escala_precipitacion = 'abundantes'
+        mean_precipitacion = df['precipitacion'].mean() 
+        def precipitacion (x):
+            if x < 450:
+                escala_precipitacion = 'escasas'
+            elif 450 <= x <= 650:
+                escala_precipitacion = 'poco abundantes'
+            elif 650 < x <= 850:
+                escala_precipitacion = 'intermedias'
+            elif 850 < x <= 1360:
+                escala_precipitacion = 'abundantes'
+            else:
+                escala_precipitacion = 'muy abundantes'
+            return escala_precipitacion
+        df['cat_precipitacion']= df['precipitacion'].apply(precipitacion)
+        escala_precipitacion = precipitacion(mean_precipitacion)
+
+        if df['precipitacion'].isnull().sum() == len(df['precipitacion']): 
+            min_precipitacion = '(no disponible)'
+            max_precipitacion = '(no disponible)'
+            escala_precipitacion= '(no disponible)'
         else:
-            escala_precipitacion = 'muy abundantes'
-        return escala_precipitacion
-    df['cat_precipitacion']= df['precipitacion'].apply(precipitacion)
-    escala_precipitacion = precipitacion(mean_precipitacion)
+            min_precipitacion = round(df['temperatura'].min())
+            max_precipitacion = round(df['temperatura'].max())
 
-    if df['precipitacion'].isnull().sum() == len(df['precipitacion']): 
-        min_precipitacion = '(no disponible)'
-        max_precipitacion = '(no disponible)'
-        escala_precipitacion= '(no disponible)'
-    else:
-        min_precipitacion = round(df['temperatura'].min())
-        max_precipitacion = round(df['temperatura'].max())
-
-    hileras = df[df.hileras_mazorca != 'no disponible']
-    if len(hileras) !=0:
-        promedio_hileras = round(hileras['hileras_mazorca'].mean())
-    else:
-        promedio_hileras = '(no disponible)'
-
-    longitud = df[df.longitud_promedio != 'no disponible']
-    if len(longitud) !=0:
-        promedio_longitud = round(longitud['longitud_promedio'].mean())
-    else:
-        promedio_longitud = '(no disponible)'
-
-    color_maices = df['color_grano']
-    colores = []
-    for i in color_maices:
-        if len (i) ==1:
-            colores.append(i[0])
+        hileras = df[df.hileras_mazorca != 'no disponible']
+        if len(hileras) !=0:
+            promedio_hileras = round(hileras['hileras_mazorca'].mean())
         else:
-            for j in range (len(i)):
-                colores.append(i[j])
-    
-    mylist = list(set(colores))
-    colores_maices = 'los colores: '
-    for i in range (len (mylist)):
-        color = str(mylist[i])
-        if color == 'no disponible':
-            continue
-        if len(color) <4:
-            continue
-        colores_maices = colores_maices + color + ', '
-    colores_maices =colores_maices[:-2]
+            promedio_hileras = '(no disponible)'
+        
+        longitud = df[df.longitud_promedio != 'no disponible']
+        if len(longitud) !=0:
+            promedio_longitud = round(longitud['longitud_promedio'].mean())
+        else:
+            promedio_longitud = '(no disponible)'
 
-    if len(colores_maices) == 11 and promedio_hileras == '(no disponible)' and promedio_longitud == '(no disponible)':
-        texto = ''
-    elif len(colores_maices) == 11 and promedio_hileras != '(no disponible)' and promedio_longitud != '(no disponible)':
-        texto = f'En esta raza se han encontrado mazorcas que en promedio tienen {promedio_hileras} hileras por mazorca y una longitud de {promedio_longitud} cm.'
-    elif len(colores_maices) != 11 and promedio_hileras != '(no disponible)' and promedio_longitud != '(no disponible)':
-        texto = f'En esta raza se han encontrado {colores_maices}; en mazorcas que en promedio tienen {promedio_hileras} hileras por mazorca y una longitud de {promedio_longitud} cm.'
-    elif len(colores_maices) != 11 and promedio_hileras == '(no disponible)' and promedio_longitud != '(no disponible)':  
-        texto = f'En esta raza se han encontrado {colores_maices} y una longitud de {promedio_longitud} cm.'
-    elif len(colores_maices) != 11 and promedio_hileras == '(no disponible)' and promedio_longitud == '(no disponible)':  
-        texto = f'En esta raza se han encontrado {colores_maices}.'
+        color_maices = df['color_grano']
+        colores = []
+        for i in color_maices:
+            if len (i) ==1:
+                colores.append(i[0])
+            else:
+                for j in range (len(i)):
+                    colores.append(i[j])
+        
+        mylist = list(set(colores))
+        colores_maices = 'los colores: '
+        for i in range (len (mylist)):
+            color = str(mylist[i])
+            if color == 'no disponible':
+                continue
+            if len(color) <4:
+                continue
+            colores_maices = colores_maices + color + ', '
+        colores_maices =colores_maices[:-2]
 
+        if len(colores_maices) == 11 and promedio_hileras == '(no disponible)' and promedio_longitud == '(no disponible)':
+            texto = ''
+        elif len(colores_maices) == 11 and promedio_hileras != '(no disponible)' and promedio_longitud != '(no disponible)':
+            texto = f'En esta raza se han encontrado mazorcas que en promedio tienen {promedio_hileras} hileras por mazorca y una longitud de {promedio_longitud} cm.'
+        elif len(colores_maices) != 11 and promedio_hileras != '(no disponible)' and promedio_longitud != '(no disponible)':
+            texto = f'En esta raza se han encontrado {colores_maices}; en mazorcas que en promedio tienen {promedio_hileras} hileras por mazorca y una longitud de {promedio_longitud} cm.'
+        elif len(colores_maices) != 11 and promedio_hileras == '(no disponible)' and promedio_longitud != '(no disponible)':  
+            texto = f'En esta raza se han encontrado {colores_maices} y una longitud de {promedio_longitud} cm.'
+        elif len(colores_maices) != 11 and promedio_hileras == '(no disponible)' and promedio_longitud == '(no disponible)':  
+            texto = f'En esta raza se han encontrado {colores_maices}.'
 
-    df= df.round() 
+        df= df.round() 
 
-    lista=[]
-    encabezados=[]
+        lista=[]
+        encabezados=[]
 
-    for i in range(0,10):
-        encabezado=df['estado'][i] + ", " + df['municipio'][i] + ", " + df['localidad'][i].upper()
-        aux = pd.DataFrame(
-            {
-                "Condición": ["Altitud", "Temperatura", "Precipitación"],
-                "Medida": [[df['altitud'][i], " msnm"], [df['temperatura'][i], " °C"] , [df['precipitacion'][i], " mm"] ],
-                "Categoría": [df['cat_altitud'][i], df['cat_temperatura'][i], df['cat_precipitacion'][i]],
-            }
-        )
+        for i in range(0,10):
+            encabezado=df['estado'][i] + ", " + df['municipio'][i] + ", " + df['localidad'][i].upper()
+            aux = pd.DataFrame(
+                {
+                    "Condición": ["Altitud", "Temperatura", "Precipitación"],
+                    "Medida": [[df['altitud'][i], " msnm"], [df['temperatura'][i], " °C"] , [df['precipitacion'][i], " mm"] ],
+                    "Categoría": [df['cat_altitud'][i], df['cat_temperatura'][i], df['cat_precipitacion'][i]],
+                }
+            )
 
-        lista.append(aux)
-        encabezados.append(encabezado)
+            lista.append(aux)
+            encabezados.append(encabezado)
 
-    return (dcc.Markdown (f'''El {value} se cultiva en general en tierras {escala_altitud} desde {min_altitud:,} hasta {max_altitud:,} metros sobre el nivel del mar (msnm). 
-    Se cultiva en lugares donde durante la época de temporal la temperatura es {escala_temperatura}, con temperaturas que van desde {min_temperatura} °C hasta {max_temperatura} 
-    ºC y donde las lluvias son {escala_precipitacion}, con cantidades que van desde {min_precipitacion} mm hasta {max_precipitacion} mm.'''), 
-    dcc.Markdown(
-        f'''{texto}'''
-    ), dcc.Markdown(
-        f'''**{encabezados[0]}**'''),
-        dbc.Table.from_dataframe(lista[0], striped=True, bordered=True, hover=True, style={'background-color':'white'}),
+        return value, (dcc.Markdown (f'''El {value} se cultiva en general en tierras {escala_altitud} desde {min_altitud:,} hasta {max_altitud:,} metros sobre el nivel del mar (msnm). 
+        Se cultiva en lugares donde durante la época de temporal la temperatura es {escala_temperatura}, con temperaturas que van desde {min_temperatura} °C hasta {max_temperatura} 
+        ºC y donde las lluvias son {escala_precipitacion}, con cantidades que van desde {min_precipitacion} mm hasta {max_precipitacion} mm.'''), 
         dcc.Markdown(
-        f'''**{encabezados[1]}**'''),
-        dbc.Table.from_dataframe(lista[1], striped=True, bordered=True, hover=True, style={'background-color':'white'}),
-        dcc.Markdown(
-        f'''**{encabezados[2]}**'''),
-        dbc.Table.from_dataframe(lista[2], striped=True, bordered=True, hover=True, style={'background-color':'white'}),
-        dcc.Markdown(
-        f'''**{encabezados[3]}**'''),
-        dbc.Table.from_dataframe(lista[3], striped=True, bordered=True, hover=True, style={'background-color':'white'}),
-        dcc.Markdown(
-        f'''**{encabezados[4]}**'''),
-        dbc.Table.from_dataframe(lista[4], striped=True, bordered=True, hover=True, style={'background-color':'white'}),
-        dcc.Markdown(
-        f'''**{encabezados[5]}**'''),
-        dbc.Table.from_dataframe(lista[5], striped=True, bordered=True, hover=True, style={'background-color':'white'}),
-        dcc.Markdown(
-        f'''**{encabezados[6]}**'''),
-        dbc.Table.from_dataframe(lista[6], striped=True, bordered=True, hover=True, style={'background-color':'white'}),
-        dcc.Markdown(
-        f'''**{encabezados[7]}**'''),
-        dbc.Table.from_dataframe(lista[7], striped=True, bordered=True, hover=True, style={'background-color':'white'}),
-        dcc.Markdown(
-        f'''**{encabezados[8]}**'''),
-        dbc.Table.from_dataframe(lista[8], striped=True, bordered=True, hover=True, style={'background-color':'white'}),
-        dcc.Markdown(
-        f'''**{encabezados[9]}**'''),
-        dbc.Table.from_dataframe(lista[9], striped=True, bordered=True, hover=True, style={'background-color':'white'}))
+            f'''{texto}'''
+        ), dcc.Markdown(
+            f'''**{encabezados[0]}**'''),
+            dbc.Table.from_dataframe(lista[0], striped=True, bordered=True, hover=True, style={'background-color':'white'}),
+            dcc.Markdown(
+            f'''**{encabezados[1]}**'''),
+            dbc.Table.from_dataframe(lista[1], striped=True, bordered=True, hover=True, style={'background-color':'white'}),
+            dcc.Markdown(
+            f'''**{encabezados[2]}**'''),
+            dbc.Table.from_dataframe(lista[2], striped=True, bordered=True, hover=True, style={'background-color':'white'}),
+            dcc.Markdown(
+            f'''**{encabezados[3]}**'''),
+            dbc.Table.from_dataframe(lista[3], striped=True, bordered=True, hover=True, style={'background-color':'white'}),
+            dcc.Markdown(
+            f'''**{encabezados[4]}**'''),
+            dbc.Table.from_dataframe(lista[4], striped=True, bordered=True, hover=True, style={'background-color':'white'}),
+            dcc.Markdown(
+            f'''**{encabezados[5]}**'''),
+            dbc.Table.from_dataframe(lista[5], striped=True, bordered=True, hover=True, style={'background-color':'white'}),
+            dcc.Markdown(
+            f'''**{encabezados[6]}**'''),
+            dbc.Table.from_dataframe(lista[6], striped=True, bordered=True, hover=True, style={'background-color':'white'}),
+            dcc.Markdown(
+            f'''**{encabezados[7]}**'''),
+            dbc.Table.from_dataframe(lista[7], striped=True, bordered=True, hover=True, style={'background-color':'white'}),
+            dcc.Markdown(
+            f'''**{encabezados[8]}**'''),
+            dbc.Table.from_dataframe(lista[8], striped=True, bordered=True, hover=True, style={'background-color':'white'}),
+            dcc.Markdown(
+            f'''**{encabezados[9]}**'''),
+            dbc.Table.from_dataframe(lista[9], striped=True, bordered=True, hover=True, style={'background-color':'white'})
+            )
+    else:
+        texto="Selecciona una raza en el menú desplegable ↑"
+        return value, dcc.Markdown(f'''{texto}''')    
     
     
     
@@ -338,6 +355,7 @@ def update_output(value,pathname):
 
 #Función para el mapa 
 def update_map(column_chosen, condition_chosen, pathname):
+    #print("column_chosen",column_chosen)
     if condition_chosen == 'altitud':
         image = '/var/www/FlaskApp/FlaskApp/altitud.png'
         color_scale = 'turbid'
@@ -352,57 +370,92 @@ def update_map(column_chosen, condition_chosen, pathname):
         x_max = 1500
     x_min= 0
     fondo = base64.b64encode(open(image, 'rb').read())
-    
-    if pathname=='/':
-        taxon_id=df_taxons.loc[df_taxons['taxon simple']== column_chosen, 'taxon_id'].values[0]
-    else:
-        taxon_id=pathname[4:]
 
-    new_query = '{\n  taxons(pagination:{limit:1} search:{field:taxon_id value:"%' + taxon_id + '%" operator:iLike}){\n    taxon_id\n    taxon\n    registroConnection(pagination:{first:1000}){\n      edges{\n        node{\n          id\n          sitio{\n            latitud\n            longitud\n            altitud\n            estado\n            municipio\n            localidad\n            condiciones_sitioFilter(pagination:{limit:2}){\n              sitio_id\n              condicion\n              valor\n              unidad\n              nombre_corto\n              fuente\n            }\n          }\n        }\n        }\n      }\n    }\n  } '
-    result= run_query(url, new_query, statusCode)    
-    complete_dict=[]
-    for i in range (len(result['data']['taxons'][0]['registroConnection']['edges'])):
-        sitio = result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['sitio']
-        if len(result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['sitio']['condiciones_sitioFilter']) == 0:
-            sitio['precipitacion'] = np.nan
-            sitio['temperatura'] = np.nan
+    if column_chosen is None:
+        #print("entro a is none")
+        complete_dict={"lat": "0","lon": "0"}
+        #df = pd.DataFrame.from_dict([complete_dict])
+        fig1 = px.scatter_mapbox(lat=['21.826080'],lon=['-101.460875'],zoom=4, height=500,color_discrete_sequence=['black'])
+        
+        fig1.update_layout(mapbox_style="carto-darkmatter")#stamen-terrain, carto-positron, open-street-map, carto-darkmatter
+        fig1.update_layout(margin={"r":0,"t":0,"l":0,"b":0})
+        fig1.update_layout(height= 300)
+        fig1.update_coloraxes(showscale=False)
+        fig2 = px.scatter(x=[0], y=[1],color_discrete_sequence=['white']) 
+        fig2.update_layout(margin={"r":20,"t":40,"l":20,"b":40})
+        fig2.update_layout(height= 200)
+        fig2.update_yaxes(showgrid=False, zeroline=False, visible= False)
+        fig2.add_layout_image(
+            dict(
+                source='data:image/png;base64,{}'.format(fondo.decode()),
+                xref="paper", yref= 'paper',
+                x=0, y=1,
+                sizex=1, sizey=1, #sizex, sizey are set by trial and error
+                xanchor="left",
+                yanchor="top",
+                sizing="stretch",
+                opacity= 0.9,
+                layer="below")
+            )    
+
+        return fig1,fig2
+
+    if column_chosen is not None:
+        #print("entro a not none")
+        
+        #if taxon url tiene algo entonces taxon id tiene ese valor y si no es el column chosen
+        if pathname=='/':
+            taxon_id=df_taxons.loc[df_taxons['taxon simple']== column_chosen, 'taxon_id'].values[0]
         else:
-            sitio['precipitacion'] = result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['sitio']['condiciones_sitioFilter'][0]['valor']
-            sitio['temperatura'] = result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['sitio']['condiciones_sitioFilter'][1]['valor']
-        del sitio['condiciones_sitioFilter']
-        complete_dict.append(sitio)
-    df = pd.DataFrame.from_dict(complete_dict)
-    fig1 = px.scatter_mapbox(df, lat="latitud", lon="longitud", hover_data={'latitud':False, 'longitud':False, 'municipio':True}, color = condition_chosen,
-                            color_continuous_scale=color_scale, zoom=4, height=500, range_color = (x_min, x_max))
-    fig1.update_layout(mapbox_style="carto-darkmatter")#stamen-terrain, carto-positron, open-street-map, carto-darkmatter
-    fig1.update_layout(margin={"r":0,"t":0,"l":0,"b":0})
-    fig1.update_layout(height= 300)
-    fig1.update_coloraxes(showscale=False)
+            taxon_id=pathname[4:]
 
-    random_num = []
-    random.seed(0)
-    for i in range(len(df)):
-        random_num.append(random.uniform(0.7, 1.5))
+        new_query = '{\n  taxons(pagination:{limit:1} search:{field:taxon_id value:"%' + taxon_id + '%" operator:iLike}){\n    taxon_id\n    taxon\n    registroConnection(pagination:{first:1000}){\n      edges{\n        node{\n          id\n          sitio{\n            latitud\n            longitud\n            altitud\n            estado\n            municipio\n            localidad\n            condiciones_sitioFilter(pagination:{limit:2}){\n              sitio_id\n              condicion\n              valor\n              unidad\n              nombre_corto\n              fuente\n            }\n          }\n        }\n        }\n      }\n    }\n  } '
+        result= run_query(url, new_query, statusCode)    
+        complete_dict=[]
+        for i in range (len(result['data']['taxons'][0]['registroConnection']['edges'])):
+            sitio = result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['sitio']
+            if len(result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['sitio']['condiciones_sitioFilter']) == 0:
+                sitio['precipitacion'] = np.nan
+                sitio['temperatura'] = np.nan
+            else:
+                sitio['precipitacion'] = result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['sitio']['condiciones_sitioFilter'][0]['valor']
+                sitio['temperatura'] = result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['sitio']['condiciones_sitioFilter'][1]['valor']
+            del sitio['condiciones_sitioFilter']
+            complete_dict.append(sitio)
+        df = pd.DataFrame.from_dict(complete_dict)
+        fig1 = px.scatter_mapbox(df, lat="latitud", lon="longitud", hover_data={'latitud':False, 'longitud':False, 'municipio':True}, color = condition_chosen,
+                                color_continuous_scale=color_scale, zoom=4, height=500, range_color = (x_min, x_max))
+        fig1.update_layout(mapbox_style="carto-darkmatter")#stamen-terrain, carto-positron, open-street-map, carto-darkmatter
+        fig1.update_layout(margin={"r":0,"t":0,"l":0,"b":0})
+        fig1.update_layout(height= 300)
+        fig1.update_coloraxes(showscale=False)
 
-    df['random']=random_num
+        random_num = []
+        random.seed(0)
+        for i in range(len(df)):
+            random_num.append(random.uniform(0.7, 1.5))
 
-    fig2 = px.scatter(df, x=condition_chosen, y="random", hover_data={'random':False, 'municipio':True},range_x= (x_min, x_max), range_y = (0.3, 2), color_discrete_sequence=n_colors('rgb(0, 0, 0)', 'rgb(255, 255, 255)', 4, colortype = 'rgb')) 
-    fig2.update_layout(margin={"r":20,"t":40,"l":20,"b":40})
-    fig2.update_layout(height= 200)
-    fig2.update_yaxes(showgrid=False, zeroline=False, visible= False)
-    fig2.add_layout_image(
-        dict(
-            source='data:image/png;base64,{}'.format(fondo.decode()),
-            xref="paper", yref= 'paper',
-            x=0, y=1,
-            sizex=1, sizey=1, #sizex, sizey are set by trial and error
-            xanchor="left",
-            yanchor="top",
-            sizing="stretch",
-            opacity= 0.9,
-            layer="below")
-        )    
-    return fig1, fig2
+        df['random']=random_num
+
+        fig2 = px.scatter(df, x=condition_chosen, y="random", hover_data={'random':False, 'municipio':True},range_x= (x_min, x_max), range_y = (0.3, 2), color_discrete_sequence=n_colors('rgb(0, 0, 0)', 'rgb(255, 255, 255)', 4, colortype = 'rgb')) 
+
+        #fig2 = px.strip(df, x=condition_chosen, stripmode='group', range_x= (x_min, x_max), color_discrete_sequence=n_colors('rgb(0, 0, 0)', 'rgb(255, 255, 255)', 4, colortype = 'rgb'))
+        fig2.update_layout(margin={"r":20,"t":40,"l":20,"b":40})
+        fig2.update_layout(height= 200)
+        fig2.update_yaxes(showgrid=False, zeroline=False, visible= False)
+        fig2.add_layout_image(
+            dict(
+                source='data:image/png;base64,{}'.format(fondo.decode()),
+                xref="paper", yref= 'paper',
+                x=0, y=1,
+                sizex=1, sizey=1, #sizex, sizey are set by trial and error
+                xanchor="left",
+                yanchor="top",
+                sizing="stretch",
+                opacity= 0.9,
+                layer="below")
+            )    
+        return fig1, fig2
 
 
 if __name__ == "__main__":
