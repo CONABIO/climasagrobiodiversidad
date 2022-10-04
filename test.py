@@ -114,6 +114,9 @@ def make_layout ():
     dcc.Loading(id= 'loading-1', type='dot', 
     children=html.Div(id='loading-output-1',style={'background-color':'#2A3C24','padding':'30px', 'color': 'white'}), 
     fullscreen= True),
+    dcc.Loading(id= 'loading-2', type='dot', 
+    children=html.Div(id='loading-output-2',style={'background-color':'#2A3C24','padding':'30px', 'color': 'white'}), 
+    fullscreen= True),
     html.Div(id='pandas-output-container-2')
 ],style={'background-image':'url("/assets/focales.jpg")','width':'102%','height':'100%','background-attachment': 'fixed','margin-top':'5px','margin-left':'-10px','margin-bottom':'-10px', 'padding-top':'50px'})
 
@@ -241,8 +244,8 @@ def update_output(n_clicks,value,pathname):
             max_precipitacion = '(no disponible)'
             escala_precipitacion= '(no disponible)'
         else:
-            min_precipitacion = round(df['temperatura'].min())
-            max_precipitacion = round(df['temperatura'].max())
+            min_precipitacion = round(df['precipitacion'].min())
+            max_precipitacion = round(df['precipitacion'].max())
 
         hileras = df[df.hileras_mazorca != 'no disponible']
         if len(hileras) !=0:
@@ -372,6 +375,7 @@ def func(data,n_clicks):
 @app.callback(
     Output(component_id='mapa', component_property='figure'),
     Output(component_id='strip', component_property='figure'),
+    Output(component_id='loading-output-2', component_property='children'),
     [Input(component_id='pandas-dropdown-2', component_property='value'),
     Input(component_id='radio-conditions', component_property='value'),
     Input('url', 'pathname')]
@@ -387,7 +391,7 @@ def update_map(column_chosen, condition_chosen, pathname):
         x_max = 3400
     elif condition_chosen == 'temperatura':
         image = '/var/www/FlaskApp/FlaskApp/temperatura.png'
-        color_scale = 'RdBu'
+        color_scale = 'balance'
         x_max = 40
     elif condition_chosen == 'precipitacion':
         image = '/var/www/FlaskApp/FlaskApp/precipitacion.png'
@@ -480,7 +484,7 @@ def update_map(column_chosen, condition_chosen, pathname):
                 opacity= 0.9,
                 layer="below")
             )    
-        return fig1, fig2
+        return fig1, fig2, pathname
 
 '''
 
