@@ -3,7 +3,7 @@ from re import search
 import dash_leaflet as dl
 import dash_leaflet.express as dlx
 import pandas as pd
-from dash import Dash, html, dcc, Input, Output, dash_table
+from dash import Dash, html, dcc, Input, Output, dash_table, ctx
 import requests
 import urllib3
 urllib3.disable_warnings()
@@ -53,6 +53,7 @@ df_taxons=pd.DataFrame.from_dict(taxons)
 # Se eliminan taxones repetidos
 df_taxons = df_taxons.drop(df_taxons['taxon'].loc[df_taxons['taxon']=='Zea mays'].index)
 df_taxons = df_taxons.drop(df_taxons['taxon'].loc[df_taxons['taxon']=='Zea mays subsp. mays'].index)
+df_taxons = df_taxons.drop(df_taxons['taxon'].loc[df_taxons['taxon']=='Zea mays subsp. mexicana raza Durango'].index)
 df_taxons = df_taxons.reset_index(drop=True)
 
 def change_taxon (x):
@@ -92,11 +93,6 @@ def make_layout ():
         ),
         html.Div([
             html.H2('Condiciones climáticas de las razas de maíz en México', style={'textAlign': 'center', 'color': '#343a40', 'font-family': ['system-ui','-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', 'sans-serif', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol']}),
-            dcc.Graph(id='mapa'),
-            html.H3('Distribución de los puntos de colecta sobre las condiciones ambientales:', style={'textAlign': 'center', 'color': '#343a40','margin-top':'20px','font-family': ['system-ui','-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', 'sans-serif', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol']}),
-            dcc.Graph(id='strip'),
-            
-            
             html.Div(dcc.Dropdown(df_taxons['taxon simple'].unique(), id='pandas-dropdown-2', placeholder='Selecciona un tipo de maiz'),style={'margin-top':'20px','cursor':'pointer'}),
             dcc.RadioItems(
                 options=[
@@ -104,6 +100,15 @@ def make_layout ():
                 {'label' : ' Temperatura ', 'value' : 'temperatura'},
                 {'label' : ' Precipitación ', 'value' : 'precipitacion'},
                 ], value='altitud', id='radio-conditions', style={'textAlign':'center','margin-top':'20px'}),
+            dcc.Graph(id='mapa'),
+            html.H3('Distribución de los puntos de colecta sobre las condiciones ambientales:', style={'textAlign': 'center', 'color': '#343a40','margin-top':'20px','font-family': ['system-ui','-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', 'sans-serif', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol']}),
+            dcc.Graph(id='strip'),
+            html.Div([
+                dbc.Button("Descargar tabla completa", color="dark", id="btn_csv", className="me-1", n_clicks=0),
+                dcc.Store(id='intermediate-value'),
+                dcc.Download(id="download-dataframe-csv"),]),
+            
+            
         ],style={'background-color':'rgba(254, 254, 255, 0.7)','padding':'30px'}),
         
     dcc.Loading(id= 'loading-1', type='dot', 
@@ -130,10 +135,10 @@ def update_url_on_dropdown_change(dropdown_value,pathname):
     
     return url_taxon
 
-@app.callback(Output('pandas-dropdown-2', 'value'),Output("loading-output-1", "children"), [Input("pandas-dropdown-2", "value"),Input('url', 'pathname')])
+@app.callback(Output('intermediate-value', 'data'),Output('pandas-dropdown-2', 'value'),Output("loading-output-1", "children"), [Input("btn_csv", "n_clicks"),Input("pandas-dropdown-2", "value"),Input('url', 'pathname')],prevent_initial_call=True,)
 
 #Función para el texto y la tabla 
-def update_output(value,pathname):
+def update_output(n_clicks,value,pathname):
     if (value is not None) or (value is None and pathname!=""):
         if pathname=='/':
             taxon_id=df_taxons.loc[df_taxons['taxon simple']== value, 'taxon_id'].values[0]
@@ -300,7 +305,9 @@ def update_output(value,pathname):
             lista.append(aux)
             encabezados.append(encabezado)
 
-        return value, (dcc.Markdown (f'''El {value} se cultiva en general en tierras {escala_altitud} desde {min_altitud:,} hasta {max_altitud:,} metros sobre el nivel del mar (msnm). 
+        #dftest = pd.DataFrame({"a": [1, 2, 3, 4], "b": [2, 1, 5, 6], "c": ["x", "x", "y", "y"]})
+
+        return (df.to_json(date_format='iso', orient='split')),value, (dcc.Markdown (f'''El {value} se cultiva en general en tierras {escala_altitud} desde {min_altitud:,} hasta {max_altitud:,} metros sobre el nivel del mar (msnm). 
         Se cultiva en lugares donde durante la época de temporal la temperatura es {escala_temperatura}, con temperaturas que van desde {min_temperatura} °C hasta {max_temperatura} 
         ºC y donde las lluvias son {escala_precipitacion}, con cantidades que van desde {min_precipitacion} mm hasta {max_precipitacion} mm.'''), 
         dcc.Markdown(
@@ -338,8 +345,26 @@ def update_output(value,pathname):
             )
     else:
         texto="Selecciona una raza en el menú desplegable ↑"
-        return value, dcc.Markdown(f'''{texto}''')    
+        dftest = pd.DataFrame({"a": [1, 2, 3, 4], "b": [2, 1, 5, 6], "c": ["x", "x", "y", "y"]})
+
+        return (dftest.to_json(date_format='iso', orient='split')),value, dcc.Markdown(f'''{texto}''')    
     
+
+@app.callback(
+    Output("download-dataframe-csv", "data"),
+    [Input('intermediate-value', 'data'),Input("btn_csv", "n_clicks")],
+    prevent_initial_call=True,
+)
+def func(data,n_clicks):
+    #dftest = pd.DataFrame({"a": [1, 2, 3, 4], "b": [2, 1, 5, 6], "c": ["x", "x", "y", "y"]})
+    dff = pd.read_json(data, orient='split')
+    #print("*************",n_clicks)
+    if "btn_csv" == ctx.triggered_id:
+        dff = dff[['estado','municipio','localidad','altitud','precipitacion','temperatura','color_grano','hileras_mazorca','longitud_promedio','cat_altitud','cat_temperatura','cat_precipitacion']]
+        dff = pd.concat([dff[col].astype(str).str.lower() for col in dff.columns], axis=1)
+        return (dcc.send_data_frame(dff.to_csv, "tabla_municipios.csv",index=False))
+    #return "hola"
+    #return dcc.send_data_frame(dff.to_csv, "test.csv",index=False)
     
     
     
@@ -457,6 +482,19 @@ def update_map(column_chosen, condition_chosen, pathname):
             )    
         return fig1, fig2
 
+'''
+
+
+@app.callback(
+    Output("download-dataframe-csv", "data"),
+    Input("btn_csv", "n_clicks"),
+    prevent_initial_call=True,
+)
+def func(n_clicks):
+    dftest = pd.DataFrame({"a": [1, 2, 3, 4], "b": [2, 1, 5, 6], "c": ["x", "x", "y", "y"]})
+
+    return dcc.send_data_frame(dftest.to_csv, "test.csv",index=False)
+'''
 
 if __name__ == "__main__":
     app.run()
