@@ -147,7 +147,7 @@ def update_output(n_clicks,value,pathname):
             taxon_id=df_taxons.loc[df_taxons['taxon simple']== value, 'taxon_id'].values[0]
         else:
             taxon_id=pathname[4:]
-        new_query = '{\n  taxons(pagination:{limit:1} search:{field:taxon_id value:"%' + taxon_id +'%" operator:iLike}){\n    taxon_id\n    taxon\n    registroConnection(pagination:{first:1000}){\n      edges{\n        node{\n          id\n          sitio{\n            altitud\n            estado\n            municipio\n            localidad\n            condiciones_sitioFilter(pagination:{limit:2}){\n              sitio_id\n              condicion\n              valor\n              unidad\n              nombre_corto\n              fuente\n            }\n          }\n          caracteristicas_cualitativasFilter(pagination:{limit:10} search:{field:nombre_corto value:"color_grano" operator:eq }){\n            nombre_corto\n            valor\n          }\n          caracteristicas_cuantitativasFilter(pagination:{limit:10}\n                search: {operator: or,\n                         search: [{field: nombre_corto,\n                          value: "hileras_mazorca",\n                          operator: eq},\n                            {field: nombre_corto,\n                             value: "longitud_mazorca",\n                             operator: eq}]\n                                                          }){\n                 nombre_corto\n                 valor\n          }\n          }\n        }\n      }\n    }\n  }\n'
+        new_query = '{\n  taxons(pagination:{limit:1} search:{field:taxon_id value:"%' + taxon_id +'%" operator:iLike}){\n    taxon_id\n    taxon\n    registroConnection(pagination:{first:1000}){\n      edges{\n        node{\n          id\n          sitio{\n            altitud\n            estado\n            municipio\n            localidad\n            condiciones_sitioFilter(pagination:{limit:2} search:{field:nombre_corto value:"%t3gw%" operator:iLike}){\n              sitio_id\n              condicion\n              valor\n              unidad\n              nombre_corto\n              fuente\n            }\n          }\n          caracteristicas_cualitativasFilter(pagination:{limit:10} search:{field:nombre_corto value:"color_grano" operator:eq }){\n            nombre_corto\n            valor\n          }\n          caracteristicas_cuantitativasFilter(pagination:{limit:10}\n                search: {operator: or,\n                         search: [{field: nombre_corto,\n                          value: "hileras_mazorca",\n                          operator: eq},\n                            {field: nombre_corto,\n                             value: "longitud_mazorca",\n                             operator: eq}]\n                                                          }){\n                 nombre_corto\n                 valor\n          }\n          }\n        }\n      }\n    }\n  }\n'
         result= run_query(url, new_query, statusCode)    
         complete_dict=[]
         value = result['data']['taxons'][0]['taxon']
@@ -160,8 +160,8 @@ def update_output(n_clicks,value,pathname):
                 sitio['precipitacion'] = np.nan
                 sitio['temperatura'] = np.nan
             else:
-                sitio['precipitacion'] = result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['sitio']['condiciones_sitioFilter'][0]['valor']
-                sitio['temperatura'] = result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['sitio']['condiciones_sitioFilter'][1]['valor']
+                sitio['temperatura'] = result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['sitio']['condiciones_sitioFilter'][0]['valor']
+                sitio['precipitacion'] = result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['sitio']['condiciones_sitioFilter'][1]['valor']
             if len (result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['caracteristicas_cualitativasFilter']) == 0:
                 color_grano = 'no disponible'
                 sitio['color_grano']=color_grano
@@ -438,7 +438,7 @@ def update_map(column_chosen, condition_chosen, pathname):
         else:
             taxon_id=pathname[4:]
 
-        new_query = '{\n  taxons(pagination:{limit:1} search:{field:taxon_id value:"%' + taxon_id + '%" operator:iLike}){\n    taxon_id\n    taxon\n    registroConnection(pagination:{first:1000}){\n      edges{\n        node{\n          id\n          sitio{\n            latitud\n            longitud\n            altitud\n            estado\n            municipio\n            localidad\n            condiciones_sitioFilter(pagination:{limit:2}){\n              sitio_id\n              condicion\n              valor\n              unidad\n              nombre_corto\n              fuente\n            }\n          }\n        }\n        }\n      }\n    }\n  } '
+        new_query = '{\n  taxons(pagination:{limit:1} search:{field:taxon_id value:"%' + taxon_id + '%" operator:iLike}){\n    taxon_id\n    taxon\n    registroConnection(pagination:{first:1000}){\n      edges{\n        node{\n          id\n          sitio{\n            latitud\n            longitud\n            altitud\n            estado\n            municipio\n            localidad\n            condiciones_sitioFilter(pagination:{limit:2}search:{field:nombre_corto value:"%t3gw%" operator:iLike}){\n              sitio_id\n              condicion\n              valor\n              unidad\n              nombre_corto\n              fuente\n            }\n          }\n        }\n        }\n      }\n    }\n  } '
         result= run_query(url, new_query, statusCode)    
         complete_dict=[]
         for i in range (len(result['data']['taxons'][0]['registroConnection']['edges'])):
@@ -447,8 +447,8 @@ def update_map(column_chosen, condition_chosen, pathname):
                 sitio['precipitacion'] = np.nan
                 sitio['temperatura'] = np.nan
             else:
-                sitio['precipitacion'] = result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['sitio']['condiciones_sitioFilter'][0]['valor']
-                sitio['temperatura'] = result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['sitio']['condiciones_sitioFilter'][1]['valor']
+                sitio['temperatura'] = result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['sitio']['condiciones_sitioFilter'][0]['valor']
+                sitio['precipitacion'] = result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['sitio']['condiciones_sitioFilter'][1]['valor']
             del sitio['condiciones_sitioFilter']
             complete_dict.append(sitio)
         df = pd.DataFrame.from_dict(complete_dict)
