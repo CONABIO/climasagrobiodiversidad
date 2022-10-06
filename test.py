@@ -80,10 +80,11 @@ def make_layout ():
         dbc.NavbarSimple(
             
             children=[
-                dbc.NavItem(dbc.NavLink("Mapa", href="/", active=True, style={'padding-left':'10px','margin-top':'5px','margin-bottom':'5px','textAlign':'center',})),
-                dbc.NavItem(dbc.NavLink("Maíces", href="http://app-siagro.conabio.gob.mx/maices/", target="_blank", style={'padding-left':'10px','margin-top':'5px','margin-bottom':'5px','textAlign':'center'})),
-                dbc.NavItem(dbc.NavLink("Contacto", href="http://app-siagro.conabio.gob.mx/maices#contacto/", target="_blank", style={'padding-left':'10px','margin-top':'5px','margin-bottom':'5px','textAlign':'center'})),
-                dbc.NavItem(dbc.NavLink("Ayuda", href="http://app-siagro.conabio.gob.mx/maices#ayuda/", target="_blank", style={'padding-left':'10px','margin-top':'5px','margin-bottom':'5px','textAlign':'center'})),
+                dbc.NavItem(dbc.NavLink("Home", href="https://app-siagro.conabio.gob.mx/maices/", style={'padding-left':'10px','margin-top':'5px','margin-bottom':'5px'})),
+                dbc.NavItem(dbc.NavLink("Mapa", href="/", active=True, style={'padding-left':'10px','margin-top':'5px','margin-bottom':'5px',})),
+                dbc.NavItem(dbc.NavLink("Ayuda", href="https://app-siagro.conabio.gob.mx/maices#ayuda/", style={'padding-left':'10px','margin-top':'5px','margin-bottom':'5px'})),
+                dbc.NavItem(dbc.NavLink("Créditos", href="https://app-siagro.conabio.gob.mx/maices#creditos/", style={'padding-left':'10px','margin-top':'5px','margin-bottom':'5px'})),
+                
             ],
             color="dark",
             dark=True,
@@ -103,21 +104,23 @@ def make_layout ():
             dcc.Graph(id='mapa'),
             html.H3('Distribución de los puntos de colecta sobre las condiciones ambientales:', style={'textAlign': 'center', 'color': '#343a40','margin-top':'20px','font-family': ['system-ui','-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', 'sans-serif', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol']}),
             dcc.Graph(id='strip'),
-            html.Div([
-                dbc.Button("Descargar tabla completa", color="dark", id="btn_csv", className="me-1", n_clicks=0),
-                dcc.Store(id='intermediate-value'),
-                dcc.Download(id="download-dataframe-csv"),]),
-            
-            
         ],style={'background-color':'rgba(254, 254, 255, 0.7)','padding':'30px'}),
         
     dcc.Loading(id= 'loading-1', type='dot', 
     children=html.Div(id='loading-output-1',style={'background-color':'#2A3C24','padding':'30px', 'color': 'white'}), 
     fullscreen= True),
+    html.Div([
+                'Aquí presentamos 10 localidades con sus condiciones, pero puedes descargar las localidades completas dando clic en el botón: ',
+                html.Br(),
+                html.Br(),
+                html.Div(dbc.Button("Descargar tabla completa", color="dark", id="btn_csv", className="me-1", n_clicks=0), className="d-grid gap-2 col-6 mx-auto"),
+                dcc.Store(id='intermediate-value'),
+                dcc.Download(id="download-dataframe-csv"),],id='divButton', style={'background-color':'#2A3C24','padding':'30px','padding-top':'0px', 'color': 'white', 'display': 'none' }),
+    
+    html.Div(id='pandas-output-container-2',style={'background-color':'#2A3C24','padding':'30px', 'padding-top':'0px','color': 'white'}),
     dcc.Loading(id= 'loading-2', type='dot', 
-    children=html.Div(id='loading-output-2',style={'background-color':'#2A3C24','padding':'30px', 'color': 'white'}), 
-    fullscreen= True),
-    html.Div(id='pandas-output-container-2')
+    children=html.Div(id='loading-output-2',style={'background-color':'#2A3C24','padding':'30px', 'color': 'rgb(42, 60, 36)'}), 
+    fullscreen= True)
 ],style={'background-image':'url("/assets/focales.jpg")','width':'102%','height':'100%','background-attachment': 'fixed','margin-top':'5px','margin-left':'-10px','margin-bottom':'-10px', 'padding-top':'50px'})
 
 app = Dash(server=server,external_stylesheets=[dbc.themes.BOOTSTRAP])
@@ -138,7 +141,7 @@ def update_url_on_dropdown_change(dropdown_value,pathname):
     
     return url_taxon
 
-@app.callback(Output('intermediate-value', 'data'),Output('pandas-dropdown-2', 'value'),Output("loading-output-1", "children"), [Input("btn_csv", "n_clicks"),Input("pandas-dropdown-2", "value"),Input('url', 'pathname')],prevent_initial_call=True,)
+@app.callback(Output('intermediate-value', 'data'),Output("divButton", "style"),Output('pandas-dropdown-2', 'value'),Output("loading-output-1", "children"),Output("pandas-output-container-2","children"), [Input("btn_csv", "n_clicks"),Input("pandas-dropdown-2", "value"),Input('url', 'pathname')],prevent_initial_call=True,)
 
 #Función para el texto y la tabla 
 def update_output(n_clicks,value,pathname):
@@ -308,14 +311,12 @@ def update_output(n_clicks,value,pathname):
             lista.append(aux)
             encabezados.append(encabezado)
 
-        #dftest = pd.DataFrame({"a": [1, 2, 3, 4], "b": [2, 1, 5, 6], "c": ["x", "x", "y", "y"]})
-
-        return (df.to_json(date_format='iso', orient='split')),value, (dcc.Markdown (f'''El {value} se cultiva en general en tierras {escala_altitud} desde {min_altitud:,} hasta {max_altitud:,} metros sobre el nivel del mar (msnm). 
+        return (df.to_json(date_format='iso', orient='split')),{'background-color':'#2A3C24','padding':'30px','padding-top':'0px', 'color': 'white','display': 'block'},value, (dcc.Markdown (f'''El {value} se cultiva en general en tierras {escala_altitud} desde {min_altitud:,} hasta {max_altitud:,} metros sobre el nivel del mar (msnm). 
         Se cultiva en lugares donde durante la época de temporal la temperatura es {escala_temperatura}, con temperaturas que van desde {min_temperatura} °C hasta {max_temperatura} 
         ºC y donde las lluvias son {escala_precipitacion}, con cantidades que van desde {min_precipitacion} mm hasta {max_precipitacion} mm.'''), 
         dcc.Markdown(
             f'''{texto}'''
-        ), dcc.Markdown(
+        )), (dcc.Markdown(
             f'''**{encabezados[0]}**'''),
             dbc.Table.from_dataframe(lista[0], striped=True, bordered=True, hover=True, style={'background-color':'white'}),
             dcc.Markdown(
@@ -347,25 +348,28 @@ def update_output(n_clicks,value,pathname):
             dbc.Table.from_dataframe(lista[9], striped=True, bordered=True, hover=True, style={'background-color':'white'})
             )
     else:
-        texto="Selecciona una raza en el menú desplegable ↑"
+        texto="Selecciona una raza en el menú desplegable al inicio de la página"
+        texto2=""
         dftest = pd.DataFrame({"a": [1, 2, 3, 4], "b": [2, 1, 5, 6], "c": ["x", "x", "y", "y"]})
 
-        return (dftest.to_json(date_format='iso', orient='split')),value, dcc.Markdown(f'''{texto}''')    
+        return (dftest.to_json(date_format='iso', orient='split')),{'display': 'none'},value, dcc.Markdown(f'''{texto}'''),dcc.Markdown(f'''{texto2}''')       
     
 
 @app.callback(
     Output("download-dataframe-csv", "data"),
-    [Input('intermediate-value', 'data'),Input("btn_csv", "n_clicks")],
+    [Input('intermediate-value', 'data'),Input("btn_csv", "n_clicks"),Input("pandas-dropdown-2", "value"),],
     prevent_initial_call=True,
 )
-def func(data,n_clicks):
+def func(data,n_clicks,value):
     #dftest = pd.DataFrame({"a": [1, 2, 3, 4], "b": [2, 1, 5, 6], "c": ["x", "x", "y", "y"]})
     dff = pd.read_json(data, orient='split')
     #print("*************",n_clicks)
     if "btn_csv" == ctx.triggered_id:
-        dff = dff[['estado','municipio','localidad','altitud','precipitacion','temperatura','color_grano','hileras_mazorca','longitud_promedio','cat_altitud','cat_temperatura','cat_precipitacion']]
+        dff['raza']=value
+        dff = dff[['raza','estado','municipio','localidad','altitud','precipitacion','temperatura','color_grano','hileras_mazorca','longitud_promedio','cat_altitud','cat_temperatura','cat_precipitacion']]
         dff = pd.concat([dff[col].astype(str).str.lower() for col in dff.columns], axis=1)
-        return (dcc.send_data_frame(dff.to_csv, "tabla_municipios.csv",index=False))
+        nombre=value+".csv"
+        return (dcc.send_data_frame(dff.to_csv, nombre,index=False))
     #return "hola"
     #return dcc.send_data_frame(dff.to_csv, "test.csv",index=False)
     
@@ -427,7 +431,7 @@ def update_map(column_chosen, condition_chosen, pathname):
                 layer="below")
             )    
 
-        return fig1,fig2
+        return fig1, fig2, pathname
 
     if column_chosen is not None:
         #print("entro a not none")
@@ -501,4 +505,4 @@ def func(n_clicks):
 '''
 
 if __name__ == "__main__":
-    app.run()
+    app.run(ssl_context='adhoc')
