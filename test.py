@@ -93,7 +93,7 @@ def make_layout ():
             links_left=True,
         ),
         html.Div([
-            html.H2('Condiciones climáticas de las razas de maíz en México', style={'textAlign': 'center', 'color': '#343a40', 'font-family': ['system-ui','-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', 'sans-serif', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol']}),
+            html.H2('Condiciones climáticas de las razas de maíz nativo y teocintles en México', style={'textAlign': 'center', 'color': '#343a40', 'font-family': ['system-ui','-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', 'sans-serif', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol']}),
             html.Div(dcc.Dropdown(df_taxons['taxon simple'].unique(), id='pandas-dropdown-2', placeholder='Selecciona un tipo de maiz'),style={'margin-top':'20px','cursor':'pointer'}),
             dcc.RadioItems(
                 options=[
@@ -456,7 +456,9 @@ def update_map(column_chosen, condition_chosen, pathname):
             del sitio['condiciones_sitioFilter']
             complete_dict.append(sitio)
         df = pd.DataFrame.from_dict(complete_dict)
-        fig1 = px.scatter_mapbox(df, lat="latitud", lon="longitud", hover_data={'latitud':False, 'longitud':False, 'municipio':True}, color = condition_chosen,
+        df['temperatura']= df['temperatura'].round()
+        df['precipitacion']= df['precipitacion'].round()
+        fig1 = px.scatter_mapbox(df, lat="latitud", lon="longitud", hover_data={'latitud':False, 'longitud':False, 'estado':True, 'municipio':True}, color = condition_chosen,
                                 color_continuous_scale=color_scale, zoom=4, height=500, range_color = (x_min, x_max))
         fig1.update_layout(mapbox_style="carto-darkmatter")#stamen-terrain, carto-positron, open-street-map, carto-darkmatter
         fig1.update_layout(margin={"r":0,"t":0,"l":0,"b":0})
@@ -470,7 +472,7 @@ def update_map(column_chosen, condition_chosen, pathname):
 
         df['random']=random_num
 
-        fig2 = px.scatter(df, x=condition_chosen, y="random", hover_data={'random':False, 'municipio':True},range_x= (x_min, x_max), range_y = (0.3, 2), color_discrete_sequence=n_colors('rgb(0, 0, 0)', 'rgb(255, 255, 255)', 4, colortype = 'rgb')) 
+        fig2 = px.scatter(df, x=condition_chosen, y="random", hover_data={'random':False, 'estado':True, 'municipio':True},range_x= (x_min, x_max), range_y = (0.3, 2), color_discrete_sequence=n_colors('rgb(0, 0, 0)', 'rgb(255, 255, 255)', 4, colortype = 'rgb')) 
 
         #fig2 = px.strip(df, x=condition_chosen, stripmode='group', range_x= (x_min, x_max), color_discrete_sequence=n_colors('rgb(0, 0, 0)', 'rgb(255, 255, 255)', 4, colortype = 'rgb'))
         fig2.update_layout(margin={"r":20,"t":40,"l":20,"b":40})
