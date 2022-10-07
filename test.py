@@ -310,10 +310,18 @@ def update_output(n_clicks,value,pathname):
 
             lista.append(aux)
             encabezados.append(encabezado)
+        
+        if "teocintle" in value:
+            texto_se_cultiva=f'''El {value} crece en general en tierras {escala_altitud} desde {min_altitud:,} hasta {max_altitud:,} metros sobre el nivel del mar (msnm). 
+            Crece en lugares donde durante la época de temporal la temperatura es {escala_temperatura}, con temperaturas que van desde {min_temperatura} °C hasta {max_temperatura} 
+            ºC y donde las lluvias son {escala_precipitacion}, con cantidades que van desde {min_precipitacion} mm hasta {max_precipitacion} mm.'''
 
-        return (df.to_json(date_format='iso', orient='split')),{'background-color':'#2A3C24','padding':'30px','padding-top':'0px', 'color': 'white','display': 'block'},value, (dcc.Markdown (f'''El {value} se cultiva en general en tierras {escala_altitud} desde {min_altitud:,} hasta {max_altitud:,} metros sobre el nivel del mar (msnm). 
-        Se cultiva en lugares donde durante la época de temporal la temperatura es {escala_temperatura}, con temperaturas que van desde {min_temperatura} °C hasta {max_temperatura} 
-        ºC y donde las lluvias son {escala_precipitacion}, con cantidades que van desde {min_precipitacion} mm hasta {max_precipitacion} mm.'''), 
+        else:
+            texto_se_cultiva=f'''El {value} se cultiva en general en tierras {escala_altitud} desde {min_altitud:,} hasta {max_altitud:,} metros sobre el nivel del mar (msnm). 
+            Se cultiva en lugares donde durante la época de temporal la temperatura es {escala_temperatura}, con temperaturas que van desde {min_temperatura} °C hasta {max_temperatura} 
+            ºC y donde las lluvias son {escala_precipitacion}, con cantidades que van desde {min_precipitacion} mm hasta {max_precipitacion} mm.'''
+
+        return (df.to_json(date_format='iso', orient='split')),{'background-color':'#2A3C24','padding':'30px','padding-top':'0px', 'color': 'white','display': 'block'},value, (dcc.Markdown (f'''{texto_se_cultiva}'''), 
         dcc.Markdown(
             f'''{texto}'''
         )), (dcc.Markdown(
