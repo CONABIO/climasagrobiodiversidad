@@ -23,7 +23,7 @@ server = Flask(__name__)
 
 #Query para obtener cada uno de los distintos taxones
 my_query= """{
-  taxons(pagination:{limit:200} search:{field:estatus value:"aceptado" operator:eq}){
+  taxons(pagination:{limit:200} search:{field:estatus value:"aceptado" operator:eq} order:{field:taxon order:ASC}){
     taxon
     taxon_id
     categoria
@@ -31,7 +31,7 @@ my_query= """{
   }
 }
 """
-url="https://maices-siagro.conabio.gob.mx/api/graphql"
+url="https://maices-siagro.conabio.gob.mx/graphql"
 statusCode = 200
 
 def run_query(uri, query, statusCode):
@@ -50,6 +50,7 @@ for i in range (len(result['data']['taxons'])):
 
 df_taxons=pd.DataFrame.from_dict(taxons)
 
+complete_csv = pd.read_csv('occurrence.csv')
 # Se eliminan taxones repetidos
 df_taxons = df_taxons.drop(df_taxons['taxon'].loc[df_taxons['taxon']=='Zea mays'].index)
 df_taxons = df_taxons.drop(df_taxons['taxon'].loc[df_taxons['taxon']=='Zea mays subsp. mays'].index)
@@ -148,45 +149,24 @@ def update_output(n_clicks,value,pathname):
     if (value is not None) or (value is None and pathname!=""):
         if pathname=='/':
             taxon_id=df_taxons.loc[df_taxons['taxon simple']== value, 'taxon_id'].values[0]
+            taxon_id=taxon_id.replace("/id=","")
         else:
-            taxon_id=pathname[4:]
-        new_query = '{\n  taxons(pagination:{limit:1} search:{field:taxon_id value:"%' + taxon_id +'%" operator:iLike}){\n    taxon_id\n    taxon\n    registroConnection(pagination:{first:1000}){\n      edges{\n        node{\n          id\n          sitio{\n            altitud\n            estado\n            municipio\n            localidad\n            condiciones_sitioFilter(pagination:{limit:2} search:{field:nombre_corto value:"%t3gw%" operator:iLike}){\n              sitio_id\n              condicion\n              valor\n              unidad\n              nombre_corto\n              fuente\n            }\n          }\n          caracteristicas_cualitativasFilter(pagination:{limit:10} search:{field:nombre_corto value:"color_grano" operator:eq }){\n            nombre_corto\n            valor\n          }\n          caracteristicas_cuantitativasFilter(pagination:{limit:10}\n                search: {operator: or,\n                         search: [{field: nombre_corto,\n                          value: "hileras_mazorca",\n                          operator: eq},\n                            {field: nombre_corto,\n                             value: "longitud_mazorca",\n                             operator: eq}]\n                                                          }){\n                 nombre_corto\n                 valor\n          }\n          }\n        }\n      }\n    }\n  }\n'
-        result= run_query(url, new_query, statusCode)    
-        complete_dict=[]
-        value = result['data']['taxons'][0]['taxon']
+            taxon_id=pathname.replace("/id=","")
+        
+        taxon_id=taxon_id.replace("/id=","")
+        taxon_id=taxon_id.replace("id=","")
+        df_taxon=complete_csv.loc[complete_csv['taxon_id'] == taxon_id]
+        print("taxon_id: ",taxon_id)
+        print("df_Taxon: ",df_taxon)
+        df=df_taxon.filter(items=['taxon','altitud','estado','municipio','localidad','precipitacion','temperatura','color_grano','hileras_mazorca','longitud_promedio'])
+        df=df.reset_index()
+        print(df)
+        value = df['taxon'][0]
+
         value = value.replace("Zea mays subsp. mays", "maíz")
         value = value.replace("Zea mays subsp. mexicana", "teocintle subespecie mexicana")
         value = value.replace("Zea mays subsp. parviglumis", "teocintle subespecie parviglumis")
-        for i in range (len(result['data']['taxons'][0]['registroConnection']['edges'])):
-            sitio = result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['sitio']
-            if len(result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['sitio']['condiciones_sitioFilter']) == 0:
-                sitio['precipitacion'] = np.nan
-                sitio['temperatura'] = np.nan
-            else:
-                sitio['temperatura'] = result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['sitio']['condiciones_sitioFilter'][0]['valor']
-                sitio['precipitacion'] = result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['sitio']['condiciones_sitioFilter'][1]['valor']
-            if len (result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['caracteristicas_cualitativasFilter']) == 0:
-                color_grano = 'no disponible'
-                sitio['color_grano']=color_grano
-            else:
-                colores = []
-                for j in range (len(result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['caracteristicas_cualitativasFilter'])):
-                    #colores = colores +result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['caracteristicas_cualitativasFilter'][j]['valor'] + ', '
-                    colores.append(result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['caracteristicas_cualitativasFilter'][j]['valor'])
-                sitio['color_grano']=colores
-            if len (result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['caracteristicas_cuantitativasFilter']) == 0:
-                hileras_mazorca = 'no disponible'
-                sitio['hileras_mazorca']=hileras_mazorca
-                sitio['longitud_promedio']=hileras_mazorca
-            elif len (result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['caracteristicas_cuantitativasFilter']) == 1:
-                sitio['hileras_mazorca']=result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['caracteristicas_cuantitativasFilter'][0]['valor']
-                sitio['longitud_promedio']='no disponible'
-            elif len (result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['caracteristicas_cuantitativasFilter']) == 2:
-                sitio['hileras_mazorca']=result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['caracteristicas_cuantitativasFilter'][0]['valor']
-                sitio['longitud_promedio']=result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['caracteristicas_cuantitativasFilter'][1]['valor']
-            del sitio['condiciones_sitioFilter']
-            complete_dict.append(sitio)
-        df = pd.DataFrame.from_dict(complete_dict) 
+        
         mean_altitud = df['altitud'].mean() 
         def altitud (x):
             if x < 1200:
@@ -197,8 +177,9 @@ def update_output(n_clicks,value,pathname):
                 escala_altitud = 'alta'
             return escala_altitud
         df['cat_altitud']= df['altitud'].apply(altitud)
+
         escala_altitud = altitud(mean_altitud)
-    
+
         min_altitud = df['altitud'].min()
         max_altitud = df['altitud'].max()
         
@@ -227,6 +208,7 @@ def update_output(n_clicks,value,pathname):
             max_temperatura = round(df['temperatura'].max())
 
         mean_precipitacion = df['precipitacion'].mean() 
+
         def precipitacion (x):
             if x < 450:
                 escala_precipitacion = 'escasas'
@@ -239,9 +221,10 @@ def update_output(n_clicks,value,pathname):
             else:
                 escala_precipitacion = 'muy abundantes'
             return escala_precipitacion
+        
         df['cat_precipitacion']= df['precipitacion'].apply(precipitacion)
-        escala_precipitacion = precipitacion(mean_precipitacion)
 
+        escala_precipitacion = precipitacion(mean_precipitacion)
         if df['precipitacion'].isnull().sum() == len(df['precipitacion']): 
             min_precipitacion = '(no disponible)'
             max_precipitacion = '(no disponible)'
@@ -251,26 +234,38 @@ def update_output(n_clicks,value,pathname):
             max_precipitacion = round(df['precipitacion'].max())
 
         hileras = df[df.hileras_mazorca != 'no disponible']
+
+        hileras["hileras_mazorca"] = pd.to_numeric(hileras["hileras_mazorca"],errors='coerce')
         if len(hileras) !=0:
             promedio_hileras = round(hileras['hileras_mazorca'].mean())
         else:
             promedio_hileras = '(no disponible)'
         
+        #
         longitud = df[df.longitud_promedio != 'no disponible']
+        longitud["longitud_promedio"] = pd.to_numeric(longitud["longitud_promedio"],errors='coerce')
         if len(longitud) !=0:
             promedio_longitud = round(longitud['longitud_promedio'].mean())
         else:
             promedio_longitud = '(no disponible)'
 
         color_maices = df['color_grano']
+
         colores = []
         for i in color_maices:
-            if len (i) ==1:
-                colores.append(i[0])
+            
+            i = i.replace("['", "")
+            i = i.replace("']", "")
+            i = i.replace("', '", ",")
+
+            iAux = i.split(",")
+
+            if len (iAux) == 1:
+                colores.append(iAux[0])
             else:
-                for j in range (len(i)):
-                    colores.append(i[j])
-        
+                for j in range (len(iAux)):
+                    colores.append(iAux[j])
+
         mylist = list(set(colores))
         colores_maices = 'los colores: '
         for i in range (len (mylist)):
@@ -369,18 +364,15 @@ def update_output(n_clicks,value,pathname):
     prevent_initial_call=True,
 )
 def func(data,n_clicks,value):
-    #dftest = pd.DataFrame({"a": [1, 2, 3, 4], "b": [2, 1, 5, 6], "c": ["x", "x", "y", "y"]})
     dff = pd.read_json(data, orient='split')
-    #print("*************",n_clicks)
+
     if "btn_csv" == ctx.triggered_id:
         dff['raza']=value
         dff = dff[['raza','estado','municipio','localidad','altitud','precipitacion','temperatura','color_grano','hileras_mazorca','longitud_promedio','cat_altitud','cat_temperatura','cat_precipitacion']]
         dff = pd.concat([dff[col].astype(str).str.lower() for col in dff.columns], axis=1)
         nombre=value+".csv"
         return (dcc.send_data_frame(dff.to_csv, nombre,index=False))
-    #return "hola"
-    #return dcc.send_data_frame(dff.to_csv, "test.csv",index=False)
-    
+
     
     
 
@@ -396,7 +388,6 @@ def func(data,n_clicks,value):
 
 #Función para el mapa 
 def update_map(column_chosen, condition_chosen, pathname):
-    #print("column_chosen",column_chosen)
     if condition_chosen == 'altitud':
         image = '/var/www/FlaskApp/FlaskApp/altitud.png'
         color_scale = 'turbid'
@@ -415,7 +406,6 @@ def update_map(column_chosen, condition_chosen, pathname):
     if column_chosen is None:
         #print("entro a is none")
         complete_dict={"lat": "0","lon": "0"}
-        #df = pd.DataFrame.from_dict([complete_dict])
         fig1 = px.scatter_mapbox(lat=['21.826080'],lon=['-101.460875'],zoom=4, height=500,color_discrete_sequence=['black'])
         
         fig1.update_layout(mapbox_style="carto-darkmatter")#stamen-terrain, carto-positron, open-street-map, carto-darkmatter
@@ -442,28 +432,19 @@ def update_map(column_chosen, condition_chosen, pathname):
         return fig1, fig2, pathname
 
     if column_chosen is not None:
-        #print("entro a not none")
-        
+
         #if taxon url tiene algo entonces taxon id tiene ese valor y si no es el column chosen
         if pathname=='/':
             taxon_id=df_taxons.loc[df_taxons['taxon simple']== column_chosen, 'taxon_id'].values[0]
+            taxon_id=taxon_id.replace("/id=","")
         else:
-            taxon_id=pathname[4:]
-
-        new_query = '{\n  taxons(pagination:{limit:1} search:{field:taxon_id value:"%' + taxon_id + '%" operator:iLike}){\n    taxon_id\n    taxon\n    registroConnection(pagination:{first:1000}){\n      edges{\n        node{\n          id\n          sitio{\n            latitud\n            longitud\n            altitud\n            estado\n            municipio\n            localidad\n            condiciones_sitioFilter(pagination:{limit:2}search:{field:nombre_corto value:"%t3gw%" operator:iLike}){\n              sitio_id\n              condicion\n              valor\n              unidad\n              nombre_corto\n              fuente\n            }\n          }\n        }\n        }\n      }\n    }\n  } '
-        result= run_query(url, new_query, statusCode)    
-        complete_dict=[]
-        for i in range (len(result['data']['taxons'][0]['registroConnection']['edges'])):
-            sitio = result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['sitio']
-            if len(result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['sitio']['condiciones_sitioFilter']) == 0:
-                sitio['precipitacion'] = np.nan
-                sitio['temperatura'] = np.nan
-            else:
-                sitio['temperatura'] = result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['sitio']['condiciones_sitioFilter'][0]['valor']
-                sitio['precipitacion'] = result['data']['taxons'][0]['registroConnection']['edges'][i]['node']['sitio']['condiciones_sitioFilter'][1]['valor']
-            del sitio['condiciones_sitioFilter']
-            complete_dict.append(sitio)
-        df = pd.DataFrame.from_dict(complete_dict)
+            taxon_id=pathname.replace("/id=","")
+        
+        complete_csv = pd.read_csv('occurrence.csv')
+        taxon_id=taxon_id.replace("/id=","")
+        taxon_id=taxon_id.replace("id=","")
+        df_taxon=complete_csv.loc[complete_csv['taxon_id'] == taxon_id]
+        df=df_taxon.filter(items=['taxon','latitud', 'longitud', 'altitud', 'estado', 'municipio', 'localidad', 'temperatura', 'precipitacion'])
         df['temperatura']= df['temperatura'].round()
         df['precipitacion']= df['precipitacion'].round()
         fig1 = px.scatter_mapbox(df, lat="latitud", lon="longitud", hover_data={'latitud':False, 'longitud':False, 'estado':True, 'municipio':True}, color = condition_chosen,
@@ -500,19 +481,6 @@ def update_map(column_chosen, condition_chosen, pathname):
             )    
         return fig1, fig2, pathname
 
-'''
-
-
-@app.callback(
-    Output("download-dataframe-csv", "data"),
-    Input("btn_csv", "n_clicks"),
-    prevent_initial_call=True,
-)
-def func(n_clicks):
-    dftest = pd.DataFrame({"a": [1, 2, 3, 4], "b": [2, 1, 5, 6], "c": ["x", "x", "y", "y"]})
-
-    return dcc.send_data_frame(dftest.to_csv, "test.csv",index=False)
-'''
 
 if __name__ == "__main__":
-    app.run(ssl_context='adhoc')
+    app.run()
