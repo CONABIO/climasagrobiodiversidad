@@ -37,4 +37,8 @@ Para la ejecución del código que se encuentra en este repositorio se recomiend
 pip3 install -r requirements.txt
 ```
 
+# Servidor
 
+Se modificó el script principal para que los datos no tardaran en cargarse y además se mostraran todos los ejemplares de un taxón (ver https://github.com/CONABIO/climasagrobiodiversidad/issues/1). 
+
+Dado que se crea un csv plano para obtener la información, el csv se genera diario a las 23:45 horas. El script que se ejecuta se puede consultar en el servidor con el comando `crontab -l` para obtener la ubicación del mismo. 
