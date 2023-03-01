@@ -18,6 +18,8 @@ import random
 from flask import send_from_directory
 from flask import Flask, request
 import dash_bootstrap_components as dbc
+import warnings
+warnings.filterwarnings('ignore')
 
 server = Flask(__name__)
 
@@ -49,8 +51,7 @@ for i in range (len(result['data']['taxons'])):
     taxons.append(result['data']['taxons'][i])
 
 df_taxons=pd.DataFrame.from_dict(taxons)
-
-complete_csv = pd.read_csv('occurrence.csv')
+complete_csv = pd.read_csv('/var/www/FlaskApp/FlaskApp/occurrence.csv')
 # Se eliminan taxones repetidos
 df_taxons = df_taxons.drop(df_taxons['taxon'].loc[df_taxons['taxon']=='Zea mays'].index)
 df_taxons = df_taxons.drop(df_taxons['taxon'].loc[df_taxons['taxon']=='Zea mays subsp. mays'].index)
@@ -111,17 +112,26 @@ def make_layout ():
     children=html.Div(id='loading-output-1',style={'background-color':'#2A3C24','padding':'30px', 'color': 'white'}), 
     fullscreen= True),
     html.Div([
-                'Aquí presentamos 10 localidades con sus condiciones, pero puedes descargar las localidades completas dando clic en el botón: ',
+                'Aquí presentamos algunas localidades con sus condiciones, pero puedes descargar las localidades completas dando clic en el botón: ',
                 html.Br(),
                 html.Br(),
-                html.Div(dbc.Button("Descargar tabla completa", color="dark", id="btn_csv", className="me-1", n_clicks=0), className="d-grid gap-2 col-6 mx-auto"),
+                html.Div(dbc.Button("Descargar tabla completa", id="btn_csv", className="me-1", n_clicks=0, style={'background-color':'#6F8A67','border-color':'#6F8A67'}), className="d-grid gap-2 col-6 mx-auto"),
                 dcc.Store(id='intermediate-value'),
                 dcc.Download(id="download-dataframe-csv"),],id='divButton', style={'background-color':'#2A3C24','padding':'30px','padding-top':'0px', 'color': 'white', 'display': 'none' }),
     
     html.Div(id='pandas-output-container-2',style={'background-color':'#2A3C24','padding':'30px', 'padding-top':'0px','color': 'white'}),
+    html.Div([
+                'Aquí presentamos algunas localidades con sus condiciones, pero puedes descargar las localidades completas dando clic en el botón: ',
+                html.Br(),
+                html.Br(),
+                html.Div(dbc.Button("Descargar tabla completa", id="btn_csv_down", className="me-1", n_clicks=0, style={'background-color':'#6F8A67','border-color':'#6F8A67'}), className="d-grid gap-2 col-6 mx-auto"),
+                #dcc.Store(id='intermediate-value'),
+                #dcc.Download(id="download-dataframe-csv"),
+                ],id='divDown', style={'background-color':'#2A3C24','padding':'30px','padding-top':'0px', 'color': 'white', 'display': 'none' }),    
     dcc.Loading(id= 'loading-2', type='dot', 
     children=html.Div(id='loading-output-2',style={'background-color':'#2A3C24','padding':'30px', 'color': 'rgb(42, 60, 36)'}), 
     fullscreen= True)
+    
 ],style={'background-image':'url("/assets/focales.jpg")','width':'102%','height':'100%','background-attachment': 'fixed','margin-top':'5px','margin-left':'-10px','margin-bottom':'-10px', 'padding-top':'50px'})
 
 app = Dash(server=server,external_stylesheets=[dbc.themes.BOOTSTRAP])
@@ -142,10 +152,10 @@ def update_url_on_dropdown_change(dropdown_value,pathname):
     
     return url_taxon
 
-@app.callback(Output('intermediate-value', 'data'),Output("divButton", "style"),Output('pandas-dropdown-2', 'value'),Output("loading-output-1", "children"),Output("pandas-output-container-2","children"), [Input("btn_csv", "n_clicks"),Input("pandas-dropdown-2", "value"),Input('url', 'pathname')],prevent_initial_call=True,)
+@app.callback(Output('intermediate-value', 'data'),Output("divButton", "style"),Output("divDown", "style"),Output('pandas-dropdown-2', 'value'),Output("loading-output-1", "children"),Output("pandas-output-container-2","children"), [Input("btn_csv", "n_clicks"),Input("btn_csv_down", "n_clicks"),Input("pandas-dropdown-2", "value"),Input('url', 'pathname')],prevent_initial_call=True,)
 
 #Función para el texto y la tabla 
-def update_output(n_clicks,value,pathname):
+def update_output(n_clicks,n_clicks2,value,pathname):
     if (value is not None) or (value is None and pathname!=""):
         if pathname=='/':
             taxon_id=df_taxons.loc[df_taxons['taxon simple']== value, 'taxon_id'].values[0]
@@ -156,11 +166,11 @@ def update_output(n_clicks,value,pathname):
         taxon_id=taxon_id.replace("/id=","")
         taxon_id=taxon_id.replace("id=","")
         df_taxon=complete_csv.loc[complete_csv['taxon_id'] == taxon_id]
-        print("taxon_id: ",taxon_id)
-        print("df_Taxon: ",df_taxon)
+        # print("taxon_id: ",taxon_id)
+        # print("df_Taxon: ",df_taxon)
         df=df_taxon.filter(items=['taxon','altitud','estado','municipio','localidad','precipitacion','temperatura','color_grano','hileras_mazorca','longitud_promedio'])
         df=df.reset_index()
-        print(df)
+        # print(df)
         value = df['taxon'][0]
 
         value = value.replace("Zea mays subsp. mays", "maíz")
@@ -170,11 +180,11 @@ def update_output(n_clicks,value,pathname):
         mean_altitud = df['altitud'].mean() 
         def altitud (x):
             if x < 1200:
-                escala_altitud = 'baja'
+                escala_altitud = 'bajas'
             elif 1200 <= x < 1800:
                 escala_altitud = 'mediana altitud'
             else:
-                escala_altitud = 'alta'
+                escala_altitud = 'altas'
             return escala_altitud
         df['cat_altitud']= df['altitud'].apply(altitud)
 
@@ -293,7 +303,12 @@ def update_output(n_clicks,value,pathname):
         lista=[]
         encabezados=[]
 
-        for i in range(0,10):
+        rangei=10
+
+        if len(df)<10:
+            rangei=len(df)
+
+        for i in range(0,rangei):
             encabezado=df['estado'][i] + ", " + df['municipio'][i] + ", " + df['localidad'][i].upper()
             aux = pd.DataFrame(
                 {
@@ -316,57 +331,89 @@ def update_output(n_clicks,value,pathname):
             Se cultiva en lugares donde durante la época de temporal la temperatura es {escala_temperatura}, con temperaturas que van desde {min_temperatura} °C hasta {max_temperatura} 
             ºC y donde las lluvias son {escala_precipitacion}, con cantidades que van desde {min_precipitacion} mm hasta {max_precipitacion} mm.'''
 
-        return (df.to_json(date_format='iso', orient='split')),{'background-color':'#2A3C24','padding':'30px','padding-top':'0px', 'color': 'white','display': 'block'},value, (dcc.Markdown (f'''{texto_se_cultiva}'''), 
-        dcc.Markdown(
-            f'''{texto}'''
-        )), (dcc.Markdown(
-            f'''**{encabezados[0]}**'''),
-            dbc.Table.from_dataframe(lista[0], striped=True, bordered=True, hover=True, style={'background-color':'white'}),
+        if taxon_id=='79259ANGIO':
+            return (df.to_json(date_format='iso', orient='split')),{'background-color':'#2A3C24','padding':'30px','padding-top':'0px', 'color': 'white','display': 'block'},{'background-color':'#2A3C24','padding':'30px','padding-top':'0px', 'color': 'white','display': 'block'},value, (dcc.Markdown (f'''{texto_se_cultiva}'''), 
             dcc.Markdown(
-            f'''**{encabezados[1]}**'''),
-            dbc.Table.from_dataframe(lista[1], striped=True, bordered=True, hover=True, style={'background-color':'white'}),
+                f'''{texto}'''
+            )), (dcc.Markdown(
+                f'''**{encabezados[0]}**'''),
+                dbc.Table.from_dataframe(lista[0], striped=True, bordered=True, hover=True, style={'background-color':'white'}),
+                dcc.Markdown(f'''**{encabezados[1]}**'''),
+                dbc.Table.from_dataframe(lista[1], striped=True, bordered=True, hover=True, style={'background-color':'white'})
+                )
+        elif taxon_id=='79268ANGIO':
+            return (df.to_json(date_format='iso', orient='split')),{'background-color':'#2A3C24','padding':'30px','padding-top':'0px', 'color': 'white','display': 'block'},{'background-color':'#2A3C24','padding':'30px','padding-top':'0px', 'color': 'white','display': 'block'},value, (dcc.Markdown (f'''{texto_se_cultiva}'''), 
             dcc.Markdown(
-            f'''**{encabezados[2]}**'''),
-            dbc.Table.from_dataframe(lista[2], striped=True, bordered=True, hover=True, style={'background-color':'white'}),
+                f'''{texto}'''
+            )), (dcc.Markdown(
+                f'''**{encabezados[0]}**'''),
+                dbc.Table.from_dataframe(lista[0], striped=True, bordered=True, hover=True, style={'background-color':'white'}),
+                dcc.Markdown(f'''**{encabezados[1]}**'''),
+                dbc.Table.from_dataframe(lista[1], striped=True, bordered=True, hover=True, style={'background-color':'white'}),
+                dcc.Markdown(
+                f'''**{encabezados[2]}**'''),
+                dbc.Table.from_dataframe(lista[2], striped=True, bordered=True, hover=True, style={'background-color':'white'}),
+                dcc.Markdown(
+                f'''**{encabezados[3]}**'''),
+                dbc.Table.from_dataframe(lista[3], striped=True, bordered=True, hover=True, style={'background-color':'white'}),
+                dcc.Markdown(
+                f'''**{encabezados[4]}**'''),
+                dbc.Table.from_dataframe(lista[4], striped=True, bordered=True, hover=True, style={'background-color':'white'}),
+                dcc.Markdown(
+                f'''**{encabezados[5]}**'''),
+                dbc.Table.from_dataframe(lista[5], striped=True, bordered=True, hover=True, style={'background-color':'white'})
+                )
+        else:
+            return (df.to_json(date_format='iso', orient='split')),{'background-color':'#2A3C24','padding':'30px','padding-top':'0px', 'color': 'white','display': 'block'},{'background-color':'#2A3C24','padding':'30px','padding-top':'0px', 'color': 'white','display': 'block'},value, (dcc.Markdown (f'''{texto_se_cultiva}'''), 
             dcc.Markdown(
-            f'''**{encabezados[3]}**'''),
-            dbc.Table.from_dataframe(lista[3], striped=True, bordered=True, hover=True, style={'background-color':'white'}),
-            dcc.Markdown(
-            f'''**{encabezados[4]}**'''),
-            dbc.Table.from_dataframe(lista[4], striped=True, bordered=True, hover=True, style={'background-color':'white'}),
-            dcc.Markdown(
-            f'''**{encabezados[5]}**'''),
-            dbc.Table.from_dataframe(lista[5], striped=True, bordered=True, hover=True, style={'background-color':'white'}),
-            dcc.Markdown(
-            f'''**{encabezados[6]}**'''),
-            dbc.Table.from_dataframe(lista[6], striped=True, bordered=True, hover=True, style={'background-color':'white'}),
-            dcc.Markdown(
-            f'''**{encabezados[7]}**'''),
-            dbc.Table.from_dataframe(lista[7], striped=True, bordered=True, hover=True, style={'background-color':'white'}),
-            dcc.Markdown(
-            f'''**{encabezados[8]}**'''),
-            dbc.Table.from_dataframe(lista[8], striped=True, bordered=True, hover=True, style={'background-color':'white'}),
-            dcc.Markdown(
-            f'''**{encabezados[9]}**'''),
-            dbc.Table.from_dataframe(lista[9], striped=True, bordered=True, hover=True, style={'background-color':'white'})
-            )
+                f'''{texto}'''
+            )), (dcc.Markdown(
+                f'''**{encabezados[0]}**'''),
+                dbc.Table.from_dataframe(lista[0], striped=True, bordered=True, hover=True, style={'background-color':'white'}),
+                dcc.Markdown(f'''**{encabezados[1]}**'''),
+                dbc.Table.from_dataframe(lista[1], striped=True, bordered=True, hover=True, style={'background-color':'white'}),
+                dcc.Markdown(
+                f'''**{encabezados[2]}**'''),
+                dbc.Table.from_dataframe(lista[2], striped=True, bordered=True, hover=True, style={'background-color':'white'}),
+                dcc.Markdown(
+                f'''**{encabezados[3]}**'''),
+                dbc.Table.from_dataframe(lista[3], striped=True, bordered=True, hover=True, style={'background-color':'white'}),
+                dcc.Markdown(
+                f'''**{encabezados[4]}**'''),
+                dbc.Table.from_dataframe(lista[4], striped=True, bordered=True, hover=True, style={'background-color':'white'}),
+                dcc.Markdown(
+                f'''**{encabezados[5]}**'''),
+                dbc.Table.from_dataframe(lista[5], striped=True, bordered=True, hover=True, style={'background-color':'white'}),
+                dcc.Markdown(
+                f'''**{encabezados[6]}**'''),
+                dbc.Table.from_dataframe(lista[6], striped=True, bordered=True, hover=True, style={'background-color':'white'}),
+                dcc.Markdown(
+                f'''**{encabezados[7]}**'''),
+                dbc.Table.from_dataframe(lista[7], striped=True, bordered=True, hover=True, style={'background-color':'white'}),
+                dcc.Markdown(
+                f'''**{encabezados[8]}**'''),
+                dbc.Table.from_dataframe(lista[8], striped=True, bordered=True, hover=True, style={'background-color':'white'}),
+                dcc.Markdown(
+                f'''**{encabezados[9]}**'''),
+                dbc.Table.from_dataframe(lista[9], striped=True, bordered=True, hover=True, style={'background-color':'white'})
+                )
     else:
         texto="Selecciona una raza en el menú desplegable al inicio de la página"
         texto2=""
         dftest = pd.DataFrame({"a": [1, 2, 3, 4], "b": [2, 1, 5, 6], "c": ["x", "x", "y", "y"]})
 
-        return (dftest.to_json(date_format='iso', orient='split')),{'display': 'none'},value, dcc.Markdown(f'''{texto}'''),dcc.Markdown(f'''{texto2}''')       
+        return (dftest.to_json(date_format='iso', orient='split')),{'display': 'none'},{'display': 'none'},value, dcc.Markdown(f'''{texto}'''),dcc.Markdown(f'''{texto2}''')       
     
 
 @app.callback(
     Output("download-dataframe-csv", "data"),
-    [Input('intermediate-value', 'data'),Input("btn_csv", "n_clicks"),Input("pandas-dropdown-2", "value"),],
+    [Input('intermediate-value', 'data'),Input("btn_csv", "n_clicks"),Input("btn_csv_down", "n_clicks"),Input("pandas-dropdown-2", "value"),],
     prevent_initial_call=True,
 )
-def func(data,n_clicks,value):
+def func(data,n_clicks,n_clicks2,value):
     dff = pd.read_json(data, orient='split')
 
-    if "btn_csv" == ctx.triggered_id:
+    if "btn_csv" == ctx.triggered_id or "btn_csv_down" == ctx.triggered_id:
         dff['raza']=value
         dff = dff[['raza','estado','municipio','localidad','altitud','precipitacion','temperatura','color_grano','hileras_mazorca','longitud_promedio','cat_altitud','cat_temperatura','cat_precipitacion']]
         dff = pd.concat([dff[col].astype(str).str.lower() for col in dff.columns], axis=1)
@@ -440,7 +487,7 @@ def update_map(column_chosen, condition_chosen, pathname):
         else:
             taxon_id=pathname.replace("/id=","")
         
-        complete_csv = pd.read_csv('occurrence.csv')
+        complete_csv = pd.read_csv('/var/www/FlaskApp/FlaskApp/occurrence.csv')
         taxon_id=taxon_id.replace("/id=","")
         taxon_id=taxon_id.replace("id=","")
         df_taxon=complete_csv.loc[complete_csv['taxon_id'] == taxon_id]
